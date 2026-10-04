@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Avatar from "@/components/Avatar";
+import Pet from "@/components/Pet";
 import { homeLabel, type AppState } from "@/lib/state";
 import { buddy, type Persona } from "@/lib/types";
 
@@ -53,7 +54,10 @@ export default function PersonaStep({ state, onPersona, onGoal, onNext, onRetake
   return (
     <div className="grid md:grid-cols-[1fr_1.2fr] gap-6 items-start">
       <div className="card flex flex-col items-center text-center gap-3 rise">
-        <Avatar look={state.look} size={200} waving />
+        <div className="flex items-end gap-1">
+          <Avatar look={state.look} size={200} waving />
+          {state.look.pet && <Pet pet={state.look.pet} size={60} />}
+        </div>
         <div className="text-sm uppercase tracking-widest text-muted">{state.basics.name}, {state.basics.age} · {homeLabel(state.basics)}</div>
         <h2 className="font-display text-3xl font-bold text-brand">{p.archetype}</h2>
         <p>{p.summary}</p>

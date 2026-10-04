@@ -166,3 +166,17 @@ body {
 .wiggle { animation: wiggle 2.4s ease-in-out infinite; transform-origin: 50% 100%; }
 @keyframes wiggle { 0%, 80%, 100% { rotate: 0deg; } 85% { rotate: -8deg; } 90% { rotate: 8deg; } 95% { rotate: -4deg; } }
 @media (prefers-reduced-motion: reduce) { .wiggle { animation: none; } }
+
+/* ---------- pets ---------- */
+.pet .pet-tail { transform-box: fill-box; transform-origin: 100% 100%; animation: wag 0.35s ease-in-out infinite alternate; }
+.pet .pet-leg { transform-box: fill-box; transform-origin: 50% 0%; }
+.pet.walking .pet-body { animation: trot 0.22s ease-in-out infinite alternate; }
+.pet.walking .pet-leg.a { animation: paw 0.22s ease-in-out infinite alternate; }
+.pet.walking .pet-leg.b { animation: paw 0.22s ease-in-out infinite alternate-reverse; }
+.pet:not(.walking) .pet-head { transform-box: fill-box; transform-origin: 30% 100%; animation: tilt 3.2s ease-in-out infinite; }
+@keyframes wag { from { rotate: -14deg; } to { rotate: 14deg; } }
+@keyframes trot { from { translate: 0 0; } to { translate: 0 -2px; } }
+@keyframes paw { from { rotate: -22deg; } to { rotate: 22deg; } }
+.pet-excited { animation: pet-hop 0.4s ease-in-out infinite alternate; }
+@keyframes pet-hop { from { translate: 0 0; } to { translate: 0 -10px; } }
+@media (prefers-reduced-motion: reduce) { .pet *, .pet-excited { animation: none !important; } }

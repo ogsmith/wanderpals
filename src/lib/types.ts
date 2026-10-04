@@ -35,7 +35,16 @@ export type EyeColor = keyof typeof EYE_COLORS;
 export type SkinTone = keyof typeof SKIN_TONES;
 export type HairStyle = (typeof HAIR_STYLES)[number];
 
+export const PET_COLORS = {
+  dog: { golden: "#d9a441", brown: "#8b5a2b", black: "#3a3540", white: "#f2efe9" },
+  cat: { orange: "#f28c38", gray: "#9a9aa5", black: "#3a3540", white: "#f4f1ea" },
+} as const;
+export type PetKind = keyof typeof PET_COLORS;
+/** Unlocked by inviting friends; trots around town after you. */
+export type Pet = { kind: PetKind; color: string; name: string };
+
 export type AvatarLook = {
+  pet?: Pet;
   skin: SkinTone;
   hair: HairColor;
   hairStyle: HairStyle;

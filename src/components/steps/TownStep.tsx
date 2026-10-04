@@ -7,6 +7,7 @@ import GroupCard from "@/components/GroupCard";
 import Hangouts, { type Draft } from "@/components/Hangouts";
 import LocationInput from "@/components/LocationInput";
 import MatchCard, { ContactLinks, CopyButton } from "@/components/MatchCard";
+import Pet from "@/components/Pet";
 import { Scenery, SpeechBubble, type Bubble } from "@/components/TownScene";
 import { pick, seeded } from "@/lib/palette";
 import { homeLabel, type AppState, type Connections, type Found, type Trip } from "@/lib/state";
@@ -145,7 +146,9 @@ export default function TownStep({
   onDecide,
   onChangeGoal,
   nudgeInvites = false,
+  onInvite,
 }: {
+  onInvite?: () => void;
   nudgeInvites?: boolean;
   state: AppState;
   trip?: Trip;
@@ -511,6 +514,13 @@ export default function TownStep({
   const [held, setHeld] = useState(false);
   const [squish, setSquish] = useState(0);
   const [marker, setMarker] = useState<{ x: number; y: number; key: number } | null>(null);
+  // Your pet trots a step behind you — and stays on the ground (bouncing) while you're carried.
+  const [petAt, setPetAt] = useState({ x: -10, y: 74, dur: 0 });
+  useEffect(() => {
+    if (held) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the pet follows the pal's position
+    setPetAt({ x: me.x + (me.flip ? 4.5 : -4.5), y: me.y, dur: me.dur });
+  }, [me, held]);
   const toScene = (clientX: number, clientY: number) => {
     const rect = sceneRef.current!.getBoundingClientRect();
     return { x: ((clientX - rect.left) / rect.width) * 100, y: ((clientY - rect.top) / rect.height) * 100 };
@@ -691,7 +701,6 @@ export default function TownStep({
   const allFound = !!data && found.length >= order.length;
   const emptyTown = !!data && order.length === 0;
   const bubbleFor = (who: string) => bubbles.find((x) => x.who === who);
-  const invite = typeof window === "undefined" ? "" : `${window.location.origin}/`;
 
   return (
     <div className="space-y-6">
@@ -724,6 +733,11 @@ export default function TownStep({
                 <div style={{ transform: p.flip ? "scaleX(-1)" : undefined }}>
                   <Avatar look={f.look} size={58} walking={p.moving} waving={visiting.includes(f.id)} className="w-[clamp(24px,4.6vw,38px)] h-auto" />
                 </div>
+                {f.look.pet && (
+                  <div className="absolute bottom-0" style={{ [p.flip ? "left" : "right"]: "85%", transform: p.flip ? "scaleX(-1)" : undefined }}>
+                    <Pet pet={f.look.pet} size={18} walking={p.moving} className="w-[clamp(14px,2.6vw,22px)] h-auto" />
+                  </div>
+                )}
                 {f.visiting && <div className="absolute -bottom-1 -left-1 text-[10px]">🧳</div>}
                 {befriended.has(f.id) && <div className="pop absolute -top-1 -right-2 text-xs">💛</div>}
               </div>
@@ -732,6 +746,22 @@ export default function TownStep({
           {marker && (
             <div key={marker.key} className="pin-drop absolute pointer-events-none text-xl" style={{ left: `${marker.x}%`, top: `${marker.y}%`, transform: "translate(-50%, -100%)", zIndex: 140 }}>
               📍
+            </div>
+          )}
+          {data && state.look.pet && (
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                left: `${petAt.x}%`,
+                top: `${petAt.y}%`,
+                transform: "translate(-50%, -100%)",
+                zIndex: Math.round(petAt.y),
+                transition: `left ${petAt.dur}ms linear 250ms, top ${petAt.dur}ms linear 250ms`,
+              }}
+            >
+              <div className={held ? "pet-excited" : ""} style={{ transform: me.flip ? "scaleX(-1)" : undefined }}>
+                <Pet pet={state.look.pet} size={24} walking={me.moving || held} className="w-[clamp(18px,3.4vw,28px)] h-auto" />
+              </div>
             </div>
           )}
           {data && (
@@ -806,15 +836,8 @@ export default function TownStep({
               <Countdown sentAt={data.sentAt} foundCount={found.length} total={order.length} noun={b.noun} he={b.he} city={cityLabel} />
             )}
           </div>
-          {(emptyTown || allFound) && invite && (
-            <button
-              className="btn-ghost"
-              onClick={() =>
-                navigator.share
-                  ? navigator.share({ title: "Wanderpals", text: "Make a little you and find your people 💛", url: invite }).catch(() => {})
-                  : navigator.clipboard?.writeText(invite)
-              }
-            >
+          {(emptyTown || allFound) && onInvite && (
+            <button className="btn-ghost" onClick={onInvite}>
               💌 Invite friends
             </button>
           )}

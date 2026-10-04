@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Avatar from "@/components/Avatar";
+import Pet from "@/components/Pet";
 import { PANTS, SHIRTS } from "@/lib/palette";
 import { EYE_COLORS, HAIR_COLORS, HAIR_STYLES, SKIN_TONES, type AvatarLook } from "@/lib/types";
 
@@ -47,7 +48,23 @@ function Chips<T extends string>({ value, options, onPick }: { value: T; options
   );
 }
 
-export default function AvatarStep({ look, onChange, onNext, ai }: { look: AvatarLook; onChange: (l: AvatarLook) => void; onNext: () => void; ai: boolean | null }) {
+export default function AvatarStep({
+  look,
+  onChange,
+  onNext,
+  ai,
+  petUnlocked = false,
+  invitesLeft = 3,
+  onPickPet,
+}: {
+  look: AvatarLook;
+  onChange: (l: AvatarLook) => void;
+  onNext: () => void;
+  ai: boolean | null;
+  petUnlocked?: boolean;
+  invitesLeft?: number;
+  onPickPet?: () => void;
+}) {
   const [photo, setPhoto] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "reading" | "done" | "error">("idle");
   const [msg, setMsg] = useState("");
@@ -84,6 +101,11 @@ export default function AvatarStep({ look, onChange, onNext, ai }: { look: Avata
           <div className="absolute bottom-0 inset-x-0 h-10 bg-emerald-400/60 dark:bg-emerald-700/60" />
           <div className={`relative mb-3 ${status === "done" ? "pop" : ""}`} key={JSON.stringify(look)}>
             <Avatar look={look} size={220} waving={status === "done"} />
+            {look.pet && (
+              <div className="absolute bottom-0 -right-14">
+                <Pet pet={look.pet} size={64} />
+              </div>
+            )}
           </div>
         {/* eslint-disable-next-line @next/next/no-img-element -- local data URL preview */}
           {photo && <img src={photo} alt="Your photo" className="absolute top-3 left-3 w-16 h-16 object-cover rounded-xl border-4 border-white shadow" />}
@@ -111,6 +133,17 @@ export default function AvatarStep({ look, onChange, onNext, ai }: { look: Avata
         </section>
         <section className="space-y-2"><h3 className="font-semibold">Shirt</h3><Swatches value={look.shirt} options={SHIRTS} onPick={(shirt) => set({ shirt })} round={false} /></section>
         <section className="space-y-2"><h3 className="font-semibold">Pants</h3><Swatches value={look.pants} options={PANTS} onPick={(pants) => set({ pants })} round={false} /></section>
+        <section className="space-y-2">
+          <h3 className="font-semibold">Pet</h3>
+          {petUnlocked ? (
+            <button className="chip !text-base inline-flex items-center gap-2" onClick={onPickPet}>
+              {look.pet ? <Pet pet={look.pet} size={26} /> : "🐶🐱"}
+              {look.pet ? `${look.pet.name || `Your ${look.pet.kind}`} · change` : "Choose your pet"}
+            </button>
+          ) : (
+            <p className="text-sm text-muted">🔒 Invite {invitesLeft} more friend{invitesLeft === 1 ? "" : "s"} to unlock a dog or cat that follows you around town.</p>
+          )}
+        </section>
         <button className="btn" onClick={onNext}>That&apos;s me →</button>
       </div>
     </div>

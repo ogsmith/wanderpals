@@ -4,7 +4,8 @@ import { UserButton, useUser } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Avatar from "@/components/Avatar";
-import { InviteModal, InviteNudge, shouldNudge } from "@/components/Invite";
+import { InviteModal, InviteNudge, PET_INVITES, PetPicker, shouldNudge } from "@/components/Invite";
+import Pet from "@/components/Pet";
 import Logo from "@/components/Logo";
 import AvatarStep from "@/components/steps/AvatarStep";
 import BasicsStep from "@/components/steps/BasicsStep";
@@ -49,6 +50,7 @@ export default function AppPage() {
   const [loadError, setLoadError] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [petOpen, setPetOpen] = useState(false);
   const [invitedBy, setInvitedBy] = useState<string | null>(null);
   const [now, setNow] = useState(0);
 
@@ -241,6 +243,18 @@ export default function AppPage() {
             </button>
           </div>
         )}
+        {onboarded && s.step === 5 && invites.sent >= PET_INVITES && !s.look.pet && (
+          <div className="rise card !border-accent flex flex-wrap items-center gap-3">
+            <div className="flex -space-x-2">
+              <Pet pet={{ kind: "dog", color: "golden", name: "" }} size={44} />
+              <Pet pet={{ kind: "cat", color: "orange", name: "" }} size={44} />
+            </div>
+            <div className="flex-1 font-display text-lg font-semibold">🎁 You unlocked a pet! Pick a dog or a cat to tag along.</div>
+            <button className="btn" onClick={() => setPetOpen(true)}>
+              Choose my pet 🐾
+            </button>
+          </div>
+        )}
         {nudge && (
           <InviteNudge
             me={s.look}
@@ -264,7 +278,17 @@ export default function AppPage() {
             onNext={next}
           />
         )}
-        {s.step === 2 && <AvatarStep look={s.look} onChange={(look) => update({ look })} onNext={() => go(s.persona ? 4 : 3)} ai={ai} />}
+        {s.step === 2 && (
+          <AvatarStep
+            look={s.look}
+            onChange={(look) => update({ look })}
+            onNext={() => go(s.persona ? 4 : 3)}
+            ai={ai}
+            petUnlocked={invites.sent >= PET_INVITES}
+            invitesLeft={Math.max(0, PET_INVITES - invites.sent)}
+            onPickPet={() => setPetOpen(true)}
+          />
+        )}
         {s.step === 3 && (
           <DeepDiveStep
             answers={s.answers}
@@ -301,6 +325,7 @@ export default function AppPage() {
             onDecide={decide}
             onChangeGoal={() => go(4)}
             nudgeInvites={invites.sent === 0}
+            onInvite={() => setInviteOpen(true)}
           />
         )}
       </main>
@@ -308,8 +333,28 @@ export default function AppPage() {
         <InviteModal
           userId={user.id}
           me={s.look}
+          sent={invites.sent}
           onClose={() => setInviteOpen(false)}
-          onSent={() => update({ invites: { ...invites, sent: invites.sent + 1 } })}
+          onSent={() => {
+            const sent = invites.sent + 1;
+            update({ invites: { ...invites, sent } });
+            // Third invite out: reward time!
+            if (sent === PET_INVITES && !s.look.pet) {
+              setInviteOpen(false);
+              setPetOpen(true);
+            }
+          }}
+        />
+      )}
+      {petOpen && (
+        <PetPicker
+          me={s.look}
+          current={s.look.pet}
+          onClose={() => setPetOpen(false)}
+          onSave={(pet) => {
+            update({ look: { ...s.look, pet } });
+            setPetOpen(false);
+          }}
         />
       )}
     </div>
