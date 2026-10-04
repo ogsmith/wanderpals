@@ -32,12 +32,13 @@ export async function visibleHangouts(me: string, onlyId?: string): Promise<Hang
   if (!rows.length) return [];
 
   const ids = rows.map((r) => r.id);
-  const people = (await sql`select hangout_id::text, user_id, status from hangout_people where hangout_id = any(${ids}::bigint[])`) as {
+  const people = (await sql`select hangout_id::text, user_id, status, invited_by from hangout_people where hangout_id = any(${ids}::bigint[])`) as {
     hangout_id: string;
     user_id: string;
     status: RSVP;
+    invited_by: string | null;
   }[];
-  const userIds = [...new Set([...rows.map((r) => r.host), ...people.map((p) => p.user_id)])];
+  const userIds = [...new Set([...rows.map((r) => r.host), ...people.flatMap((p) => [p.user_id, p.invited_by ?? []].flat())])];
   const profiles = (await sql`
     select user_id, state, home_lat, home_lng, trip_label, trip_lat, trip_lng from profiles where user_id = any(${userIds}::text[])`) as Parameters<typeof toPerson>[0][];
   const byId = new Map<string, Townsperson>();
@@ -60,9 +61,10 @@ export async function visibleHangouts(me: string, onlyId?: string): Promise<Hang
         host: byId.get(r.host)!,
         isHost: r.host === me,
         myStatus: mine?.status ?? null,
+        invitedMeBy: mine?.invited_by && mine.invited_by !== r.host ? byId.get(mine.invited_by)?.name : undefined,
         people: people
           .filter((p) => p.hangout_id === r.id && byId.has(p.user_id))
-          .map((p) => ({ person: byId.get(p.user_id)!, status: p.status })),
+          .map((p) => ({ person: byId.get(p.user_id)!, status: p.status, invitedBy: p.invited_by ? byId.get(p.invited_by)?.name : undefined })),
       };
     });
 }

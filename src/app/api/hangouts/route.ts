@@ -33,18 +33,42 @@ export async function POST(req: Request) {
     values (${me}, ${title}, ${place}, ${startsAt.toISOString()}, ${note}, ${body.open !== false})
     returning id::text`) as { id: string }[];
   await sql`insert into hangout_people (hangout_id, user_id, status) values (${row.id}::bigint, ${me}, 'going')`;
-  for (const id of invite) await sql`insert into hangout_people (hangout_id, user_id, status) values (${row.id}::bigint, ${id}, 'invited') on conflict do nothing`;
+  for (const id of invite)
+    await sql`insert into hangout_people (hangout_id, user_id, status, invited_by) values (${row.id}::bigint, ${id}, 'invited', ${me}) on conflict do nothing`;
   return Response.json({ hangouts: await visibleHangouts(me) });
 }
 
-/** RSVP (or join an open hangout hosted by a pal). */
+/**
+ * Update a hangout you can see:
+ *   { id, status }   RSVP (or join an open hangout hosted by a pal)
+ *   { id, invite }   bring your pals along (host, or anyone going / maybe)
+ *   { id, remove }   host takes someone off the list
+ */
 export async function PATCH(req: Request) {
   const me = await currentUserId();
   if (!me) return unauthorized();
-  const { id, status } = (await req.json().catch(() => ({}))) as { id?: string; status?: string };
-  if (!id || !/^\d+$/.test(id) || !["going", "maybe", "declined"].includes(status ?? "")) return bad("Invalid RSVP");
+  const { id, status, invite, remove } = (await req.json().catch(() => ({}))) as { id?: string; status?: string; invite?: unknown; remove?: unknown };
+  if (!id || !/^\d+$/.test(id)) return bad("Invalid hangout");
   const [visible] = await visibleHangouts(me, id);
   if (!visible) return Response.json({ error: "That hangout isn't available" }, { status: 404 });
+
+  if (Array.isArray(invite)) {
+    if (!visible.isHost && visible.myStatus !== "going" && visible.myStatus !== "maybe") return bad("Say you're in first, then bring a pal");
+    const pals = new Set(await palIds(me));
+    const ids = invite.filter((x): x is string => typeof x === "string");
+    if (!ids.length || ids.some((x) => !pals.has(x))) return bad("You can only invite your own pals");
+    for (const pal of ids)
+      await sql`insert into hangout_people (hangout_id, user_id, status, invited_by) values (${id}::bigint, ${pal}, 'invited', ${me}) on conflict do nothing`;
+    return Response.json({ hangouts: await visibleHangouts(me) });
+  }
+
+  if (typeof remove === "string") {
+    if (!visible.isHost) return bad("Only the host can take someone off");
+    await sql`delete from hangout_people where hangout_id = ${id}::bigint and user_id = ${remove} and user_id <> ${me}`;
+    return Response.json({ hangouts: await visibleHangouts(me) });
+  }
+
+  if (!["going", "maybe", "declined"].includes(status ?? "")) return bad("Invalid RSVP");
   if (visible.isHost) return bad("You're hosting this one");
   await sql`
     insert into hangout_people (hangout_id, user_id, status) values (${id}::bigint, ${me}, ${status})

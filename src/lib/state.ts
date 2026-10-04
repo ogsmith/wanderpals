@@ -46,7 +46,8 @@ export type Hangout = {
   host: Townsperson;
   isHost: boolean;
   myStatus: RSVP | null;
-  people: { person: Townsperson; status: RSVP }[];
+  invitedMeBy?: string; // first name of whoever invited you
+  people: { person: Townsperson; status: RSVP; invitedBy?: string }[]; // invitedBy = first name of whoever brought them
 };
 
 export const EMPTY_CONNECTIONS: Connections = { mine: {}, incoming: [], contacts: {}, friends: [] };

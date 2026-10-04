@@ -150,11 +150,33 @@ function PlanModal({ pals, draft, onClose, onCreated }: { pals: Townsperson[]; d
   );
 }
 
-function HangoutCard({ h, now, onRsvp, onCancel }: { h: Hangout; now: number; onRsvp: (s: RSVP) => void; onCancel: () => void }) {
+function HangoutCard({
+  h,
+  now,
+  pals,
+  onRsvp,
+  onCancel,
+  onInvite,
+  onRemove,
+}: {
+  h: Hangout;
+  now: number;
+  pals: Townsperson[];
+  onRsvp: (s: RSVP) => void;
+  onCancel: () => void;
+  onInvite: (ids: string[]) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [picking, setPicking] = useState(false);
   const going = h.people.filter((p) => p.status === "going");
   const maybe = h.people.filter((p) => p.status === "maybe");
+  const invited = h.people.filter((p) => p.status === "invited");
   const past = new Date(h.startsAt).getTime() < now;
   const joined = h.isHost || h.myStatus === "going";
+  // Host, or anyone who's in (or maybe), can bring their own pals along.
+  const canInvite = !past && (h.isHost || h.myStatus === "going" || h.myStatus === "maybe");
+  const onList = new Set([h.host.id, ...h.people.map((p) => p.person.id)]);
+  const invitable = pals.filter((p) => !onList.has(p.id));
   return (
     <div className={`rounded-3xl border-2 p-4 space-y-3 bg-card ${joined ? "border-brand" : "border-line"} ${past || h.myStatus === "declined" ? "opacity-60" : ""}`}>
       <div className="flex items-start gap-3">
@@ -168,7 +190,11 @@ function HangoutCard({ h, now, onRsvp, onCancel }: { h: Hangout; now: number; on
             {when(h.startsAt)}
             {h.place && <> · 📍 {h.place}</>}
           </div>
-          <div className="text-xs text-muted mt-0.5">{h.isHost ? "You're hosting" : `Hosted by ${h.host.name}`}{h.open && " · open to pals"}</div>
+          <div className="text-xs text-muted mt-0.5">
+            {h.isHost ? "You're hosting" : `Hosted by ${h.host.name}`}
+            {h.open && " · open to pals"}
+          </div>
+          {h.myStatus === "invited" && h.invitedMeBy && <div className="mt-1 inline-block rounded-full bg-accent/40 px-2 py-0.5 text-xs font-semibold">💌 {h.invitedMeBy} invited you</div>}
         </div>
       </div>
       {h.note && <p className="text-sm">&ldquo;{h.note}&rdquo;</p>}
@@ -189,6 +215,47 @@ function HangoutCard({ h, now, onRsvp, onCancel }: { h: Hangout; now: number; on
           {going.length} going{maybe.length ? ` · ${maybe.length} maybe` : ""}
         </span>
       </div>
+      {invited.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 text-xs">
+          <span className="text-muted self-center">Invited:</span>
+          {invited.map(({ person, invitedBy }) => (
+            <span key={person.id} className="chip !py-0.5 !px-2 !text-xs inline-flex items-center gap-1">
+              {person.name}
+              {invitedBy && invitedBy !== h.host.name && <span className="text-muted">(by {invitedBy})</span>}
+              {h.isHost && (
+                <button className="ml-0.5 text-muted hover:text-ink" title={`Take ${person.name} off`} onClick={() => onRemove(person.id)}>
+                  ✕
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+      {picking && (
+        <div className="rounded-2xl border-2 border-dashed border-brand/50 p-3 space-y-2">
+          <div className="text-sm font-semibold">Bring a pal along</div>
+          {invitable.length ? (
+            <div className="flex flex-wrap gap-2">
+              {invitable.map((p) => (
+                <button
+                  key={p.id}
+                  className="flex items-center gap-1.5 rounded-2xl border-2 border-line hover:border-brand pl-1 pr-3 py-1 transition"
+                  onClick={() => {
+                    onInvite([p.id]);
+                    setPicking(false);
+                  }}
+                >
+                  <Avatar look={p.look} size={30} />
+                  <span className="font-semibold text-sm">{p.name}</span>
+                  <span className="text-brand">＋</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted">All your pals are already on this one 🎉</p>
+          )}
+        </div>
+      )}
       {!past && (
         <div className="flex flex-wrap gap-2 items-center">
           {!h.isHost && (
@@ -203,6 +270,11 @@ function HangoutCard({ h, now, onRsvp, onCancel }: { h: Hangout; now: number; on
                 Can&apos;t make it
               </button>
             </>
+          )}
+          {canInvite && pals.length > 0 && (
+            <button className="chip !border-brand/60" onClick={() => setPicking((x) => !x)}>
+              ＋ Invite a pal
+            </button>
           )}
           {joined && (
             <button className="text-sm underline text-muted" onClick={() => downloadIcs(h)}>
@@ -270,6 +342,9 @@ export default function Hangouts({ pals, me, draft, onDraft }: { pals: Townspers
             key={h.id}
             h={h}
             now={now}
+            pals={pals}
+            onInvite={(invite) => act(call("PATCH", { id: h.id, invite }))}
+            onRemove={(remove) => act(call("PATCH", { id: h.id, remove }))}
             onRsvp={(status) => act(call("PATCH", { id: h.id, status }))}
             onCancel={() => confirm(`Cancel "${h.title}"? Everyone invited will stop seeing it.`) && act(call("DELETE", undefined, `?id=${h.id}`))}
           />

@@ -55,6 +55,7 @@ export function ensureSchema() {
       primary key (hangout_id, user_id)
     )`;
     await sql`create index if not exists hangout_people_user on hangout_people (user_id)`;
+    await sql`alter table hangout_people add column if not exists invited_by text`;
     await sql`create table if not exists usage (
       user_id text not null,
       day date not null default current_date,
