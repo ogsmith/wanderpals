@@ -4,6 +4,7 @@ import { UserButton, useUser } from "@clerk/nextjs";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Avatar from "@/components/Avatar";
+import { InviteModal, InviteNudge, shouldNudge } from "@/components/Invite";
 import Logo from "@/components/Logo";
 import AvatarStep from "@/components/steps/AvatarStep";
 import BasicsStep from "@/components/steps/BasicsStep";
@@ -16,6 +17,8 @@ import { searchKey, type Basics } from "@/lib/types";
 const ONBOARDING = ["About you", "Your pal", "Get to know you", "Your persona"];
 /** Pre-accounts versions kept progress in localStorage; import it once into the account. */
 const LEGACY_KEY = "bricktown:v2";
+/** Set by the landing page when someone arrives through a friend's invite link. */
+const REF_KEY = "wanderpals:ref";
 
 function legacyState(): AppState | null {
   try {
@@ -45,6 +48,9 @@ export default function AppPage() {
   const [ai, setAi] = useState<boolean | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [invitedBy, setInvitedBy] = useState<string | null>(null);
+  const [now, setNow] = useState(0);
 
   // Load the account's profile (or start a new one, prefilled from sign-up).
   useEffect(() => {
@@ -68,6 +74,17 @@ export default function AppPage() {
       })
       .catch(() => setLoadError(true));
     json<{ ai: boolean }>("/api/status").then((d) => setAi(d.ai)).catch(() => setAi(false));
+
+    // Arrived via a friend's invite link? They've already said yes to you.
+    let ref: string | null = null;
+    try {
+      ref = localStorage.getItem(REF_KEY);
+      localStorage.removeItem(REF_KEY);
+    } catch {}
+    if (ref)
+      json<{ ok: boolean; name?: string }>("/api/invite", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: ref }) })
+        .then((d) => d.ok && d.name && setInvitedBy(d.name))
+        .catch(() => {});
   }, [isLoaded, user]);
 
   // Save profile edits (debounced), and flush if the tab is closing.
@@ -96,6 +113,8 @@ export default function AppPage() {
   const refreshConnections = useCallback(() => json<Connections>("/api/connections").then(setConnections).catch(() => {}), []);
   const inTown = s?.step === 5;
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clock for the invite reminder, read when entering town
+    setNow(Date.now());
     if (!inTown) return;
     refreshConnections();
     const t = setInterval(refreshConnections, 30_000);
@@ -147,6 +166,8 @@ export default function AppPage() {
   const tripKey = searchKey(s.search, s.basics.location);
   const onboarded = !!s.persona;
   const waiting = connections.incoming.filter((p) => !connections.mine[p.id]).length;
+  const invites = s.invites ?? { sent: 0, nudgedAt: 0 };
+  const nudge = onboarded && s.step === 5 && now > 0 && shouldNudge(s.invites, now);
 
   return (
     <div className="flex-1 flex flex-col">
@@ -171,6 +192,11 @@ export default function AppPage() {
             {onboarded && s.step !== 5 && (
               <button className="rounded-xl px-3 py-1.5 hover:bg-line/60" onClick={() => go(5)}>
                 🏘️ Town
+              </button>
+            )}
+            {onboarded && user && (
+              <button className="rounded-xl px-3 py-1.5 bg-brand text-white hover:brightness-110" onClick={() => setInviteOpen(true)}>
+                💌 <span className="hidden sm:inline">Invite friends</span>
               </button>
             )}
             {onboarded && s.step === 5 && (
@@ -203,7 +229,26 @@ export default function AppPage() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl px-4 py-8 flex-1">
+      <main className="mx-auto w-full max-w-5xl px-4 py-8 flex-1 space-y-6">
+        {invitedBy && (
+          <div className="rise card !border-good !bg-good/10 flex items-center gap-3">
+            <span className="text-2xl">💛</span>
+            <div className="flex-1">
+              <b>{invitedBy} invited you!</b> {onboarded ? "Say yes in town and you're pals." : "Finish making your pal and you'll find them waiting to meet you in town."}
+            </div>
+            <button className="text-sm underline text-muted" onClick={() => setInvitedBy(null)}>
+              OK
+            </button>
+          </div>
+        )}
+        {nudge && (
+          <InviteNudge
+            me={s.look}
+            sent={invites.sent}
+            onInvite={() => setInviteOpen(true)}
+            onLater={() => update({ invites: { ...invites, nudgedAt: Date.now() } })}
+          />
+        )}
         {s.step === 1 && (
           <BasicsStep
             look={s.look}
@@ -255,9 +300,18 @@ export default function AppPage() {
             onSearch={(search) => update({ search })}
             onDecide={decide}
             onChangeGoal={() => go(4)}
+            nudgeInvites={invites.sent === 0}
           />
         )}
       </main>
+      {inviteOpen && user && (
+        <InviteModal
+          userId={user.id}
+          me={s.look}
+          onClose={() => setInviteOpen(false)}
+          onSent={() => update({ invites: { ...invites, sent: invites.sent + 1 } })}
+        />
+      )}
     </div>
   );
 }

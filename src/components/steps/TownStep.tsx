@@ -144,7 +144,9 @@ export default function TownStep({
   onSearch,
   onDecide,
   onChangeGoal,
+  nudgeInvites = false,
 }: {
+  nudgeInvites?: boolean;
   state: AppState;
   trip?: Trip;
   connections: Connections;
@@ -289,6 +291,10 @@ export default function TownStep({
   const interruptRef = useRef(false);
   const commandRef = useRef<Command | null>(null);
   const hasData = !!data;
+  const nudgeRef = useRef(nudgeInvites);
+  useEffect(() => {
+    nudgeRef.current = nudgeInvites;
+  }, [nudgeInvites]);
   useEffect(() => {
     if (!hasData) return;
     const alive = { current: true }; // per-run, so StrictMode/HMR re-runs cancel the old loop
@@ -484,7 +490,8 @@ export default function TownStep({
           sinceFind++;
         } else {
           if (await walkTo(WALK.x0 + Math.random() * (WALK.x1 - WALK.x0), WALK.y0 + Math.random() * (WALK.y1 - WALK.y0))) {
-            if (Math.random() < 0.6) await say("me", pick(STROLL_THOUGHTS), 1800, "meh");
+            const thought = nudgeRef.current && Math.random() < 0.3 ? pick(["💌 Psst… invite a friend!", "🥺 I'd love to meet your friends!", "💌 More friends = more fun in town!"]) : pick(STROLL_THOUGHTS);
+            if (Math.random() < 0.6) await say("me", thought, 1800, "meh");
             if (!stop()) setBubbles([]);
           }
           sinceFind++;

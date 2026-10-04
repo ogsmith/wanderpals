@@ -11,6 +11,7 @@ export type AppState = {
   persona: Persona | null;
   goal: string;
   search: Search; // home vs. traveling, locals vs. visitors
+  invites?: { sent: number; nudgedAt: number }; // how many invites you've shared, and when we last reminded you
 };
 
 export type Found = { id: string; at: number };

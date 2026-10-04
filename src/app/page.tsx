@@ -213,6 +213,41 @@ function PromoVideo() {
   );
 }
 
+/** Someone arrived through a friend's invite link (/?ref=…): remember it for after sign-up and say who it's from. */
+function InvitedBanner() {
+  const [inviter, setInviter] = useState<{ name: string; look: AvatarLook } | null>(null);
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (!ref) return;
+    try {
+      localStorage.setItem("wanderpals:ref", ref);
+    } catch {}
+    fetch(`/api/invite?code=${encodeURIComponent(ref)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.name && setInviter(d))
+      .catch(() => {});
+  }, []);
+  if (!inviter) return null;
+  return (
+    <div className="mx-auto max-w-6xl px-4 pt-4">
+      <div className="rise flex items-center gap-4 rounded-3xl border-4 border-accent bg-card p-4 shadow-lg">
+        <div className="wiggle shrink-0">
+          <Avatar look={inviter.look} size={90} waving />
+        </div>
+        <div className="flex-1">
+          <div className="font-display text-2xl sm:text-3xl font-bold leading-tight">
+            <span className="text-brand">{inviter.name}</span> invited you! 💛
+          </div>
+          <p className="text-muted">Make your own little you — {inviter.name}&apos;s pal will be waiting to meet yours in town.</p>
+        </div>
+        <div className="hidden sm:block">
+          <CTA big />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Landing() {
   const parade = POPULATION.slice(0, 12);
   return (
@@ -235,6 +270,8 @@ export default function Landing() {
           </div>
         </div>
       </header>
+
+      <InvitedBanner />
 
       {/* HERO */}
       <section className="mx-auto max-w-6xl px-4 pt-8 pb-16 grid md:grid-cols-[1.1fr_1fr] gap-10 items-center">
