@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+!.env.example
+
+# rendered promo videos (re-create with npm run video:render)
+marketing/

@@ -1,26 +1,165 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --bg: #eaf6ff;
+  --ink: #1d2433;
+  --muted: #5d6b82;
+  --card: #ffffff;
+  --line: #d6e3f0;
+  --brand: #ff5a36;
+  --brand-ink: #ffffff;
+  --accent: #ffd23f;
+  --good: #2bb673;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #111827;
+    --ink: #eef2f8;
+    --muted: #9aa8bd;
+    --card: #1b2434;
+    --line: #2b3850;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  --color-bg: var(--bg);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-accent: var(--accent);
+  --color-good: var(--good);
+  --font-sans: var(--font-geist-sans);
+  --font-display: var(--font-fredoka);
 }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 font-display text-lg font-semibold transition active:translate-y-[2px] disabled:opacity-40 disabled:pointer-events-none;
+  background: var(--brand);
+  color: var(--brand-ink);
+  box-shadow: 0 4px 0 #c43c1d;
+}
+.btn:active { box-shadow: 0 2px 0 #c43c1d; }
+.btn-ghost {
+  @apply inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 font-display font-medium border-2 transition;
+  border-color: var(--line);
+  background: var(--card);
+}
+.btn-ghost:hover { border-color: var(--muted); }
+.card {
+  @apply rounded-3xl border-2 p-6;
+  background: var(--card);
+  border-color: var(--line);
+}
+.chip {
+  @apply rounded-full border-2 px-3.5 py-1.5 text-sm font-medium transition select-none;
+  border-color: var(--line);
+  background: var(--card);
+}
+.chip[data-on="true"] {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+.input {
+  @apply w-full rounded-xl border-2 px-4 py-3 text-base outline-none transition;
+  border-color: var(--line);
+  background: var(--card);
+}
+.input:focus { border-color: var(--brand); }
+
+/* ---------- avatar animation ---------- */
+.avatar .body, .avatar .arm, .avatar .foot, .avatar .head { transform-box: fill-box; }
+.avatar .body { transform-origin: 50% 100%; }
+.avatar .head { transform-origin: 50% 90%; }
+.avatar .arm-l { transform-origin: 80% 15%; }
+.avatar .arm-r { transform-origin: 20% 15%; }
+
+/* idle: gentle breathing squish + head tilt */
+.avatar:not(.walking) .body { animation: breathe 2.6s ease-in-out infinite; }
+.avatar:not(.walking) .head { animation: tilt 4s ease-in-out infinite; }
+/* walking: waddle side to side with little hops */
+.avatar.walking .body { animation: waddle 0.5s ease-in-out infinite alternate; }
+.avatar.walking .foot-l { animation: hop 0.25s ease-in-out infinite alternate; }
+.avatar.walking .foot-r { animation: hop 0.25s ease-in-out infinite alternate-reverse; }
+.avatar.walking .arm-l { animation: flap 0.25s ease-in-out infinite alternate; }
+.avatar.walking .arm-r { animation: flap 0.25s ease-in-out infinite alternate-reverse; }
+.avatar.waving .arm-r { animation: wave 0.45s ease-in-out infinite alternate; }
+
+@keyframes breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.025, 0.975); } }
+@keyframes tilt { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-3deg); } }
+@keyframes waddle { from { transform: rotate(-5deg) translateY(0); } to { transform: rotate(5deg) translateY(-2px); } }
+@keyframes hop { from { transform: translateY(0); } to { transform: translateY(-3px); } }
+@keyframes flap { from { transform: rotate(-12deg); } to { transform: rotate(12deg); } }
+@keyframes wave { from { transform: rotate(-150deg); } to { transform: rotate(-110deg); } }
+
+@keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.pop { animation: pop 0.25s cubic-bezier(.2,1.4,.5,1) both; }
+@keyframes rise { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+.rise { animation: rise 0.4s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar * { animation: none !important; }
+}
+
+/* ---------- celebration ---------- */
+.fade-in { animation: fadein 0.2s ease-out both; }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+.celebrate-card { animation: celebrate-in 0.55s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes celebrate-in { from { transform: scale(0.4) rotate(-6deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.rays {
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--accent) 45%, transparent) 0 10deg, transparent 10deg 20deg);
+  animation: spin 14s linear infinite;
+  mask-image: radial-gradient(circle, black 15%, transparent 60%);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.confetti { position: absolute; top: -20px; animation-name: confetti-fall; animation-timing-function: cubic-bezier(.3, .4, .6, 1); animation-fill-mode: both; }
+@keyframes confetti-fall {
+  from { transform: translateY(0) rotate(0); opacity: 1; }
+  to { transform: translateY(105vh) rotate(var(--spin)); opacity: 0.9; }
+}
+.jump { animation: jump 0.7s cubic-bezier(.3, 0, .4, 1) infinite alternate; }
+@keyframes jump { from { transform: translateY(0) scale(1, 1); } 15% { transform: translateY(0) scale(1.08, 0.92); } to { transform: translateY(-18px) scale(0.97, 1.03); } }
+.float-heart { bottom: 10%; animation: float-up 2.4s ease-out infinite; opacity: 0; }
+@keyframes float-up { 0% { transform: translateY(0) scale(0.6); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-120px) scale(1.2); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .confetti, .rays, .jump, .float-heart { animation: none !important; }
+  .confetti, .float-heart { display: none; }
+}
+
+/* ---------- landing ---------- */
+.hop { animation: hop-in 0.5s cubic-bezier(.3, 1.6, .5, 1) both; }
+@keyframes hop-in { 0% { transform: translateY(0) scale(1, 1); } 25% { transform: translateY(6px) scale(1.1, 0.88); } 60% { transform: translateY(-34px) scale(0.95, 1.06); } 100% { transform: none; } }
+.drift { animation: drift 18s ease-in-out infinite alternate; }
+@keyframes drift { from { transform: translateX(-20px); } to { transform: translateX(40px); } }
+.walk-in { animation: walk-in 0.6s cubic-bezier(.2, 1.3, .4, 1) both; }
+@keyframes walk-in { from { transform: translateY(60px) scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
+.parade { left: -140px; animation: parade 31s linear infinite; }
+@keyframes parade { from { transform: translateX(0); } to { transform: translateX(calc(100vw + 280px)); } }
+.squiggle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='10' viewBox='0 0 40 10'%3E%3Cpath d='M0 5 Q10 0 20 5 T40 5' fill='none' stroke='%23ffd23f' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+  background-size: 40px 10px;
+  padding-bottom: 0.12em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hop, .drift, .walk-in, .parade { animation: none !important; }
+  .parade { display: none; }
+}
+
+/* ---------- grab your pal ---------- */
+.held { animation: dangle 0.55s ease-in-out infinite alternate; transform-origin: 50% 0%; scale: 1.15; }
+@keyframes dangle { from { rotate: -9deg; } to { rotate: 9deg; } }
+.land { animation: land 0.45s cubic-bezier(.3, 1.6, .5, 1); transform-origin: 50% 100%; }
+@keyframes land { 0% { scale: 1.25 0.75; } 50% { scale: 0.92 1.1; } 100% { scale: 1 1; } }
+.pin-drop { animation: pin-drop 1.4s ease-out both; }
+@keyframes pin-drop { 0% { translate: 0 -20px; opacity: 0; } 20% { translate: 0 0; opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .held, .land, .pin-drop { animation: none !important; } }

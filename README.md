@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Wanderpals
 
-## Getting Started
+Build a little you, tell it who you are, and it wanders around town meeting real people in your season of life — then suggests a first hang.
 
-First, run the development server:
+## Stack
+
+- Next.js 16 (App Router) on Vercel
+- **Clerk** for sign-in, **Neon Postgres** for profiles / trips / connections (both via Vercel Marketplace)
+- **Claude** (AI SDK) for reading selfies, building the persona, and ranking matches — with rule-based fallbacks
+- **Google Maps** Places + Geocoding for town search and "use my location" (optional)
+- Remotion for the promo video
+
+## Run locally
 
 ```bash
+npm install
+vercel link            # once, to the wanderpals project
+vercel env pull        # pulls Clerk + Neon keys into .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then add `ANTHROPIC_API_KEY` (and optionally `GOOGLE_MAPS_API_KEY`) to `.env.local` — see `.env.example`.
+Database tables are created automatically on first request.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+vercel          # preview
+vercel --prod   # production
+```
 
-## Learn More
+All env vars must exist in the Vercel project (Marketplace ones are added automatically).
 
-To learn more about Next.js, take a look at the following resources:
+## How it works
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `/` — public landing page. `/sign-in`, `/sign-up` — Clerk. `/app` — the app (requires sign-in, enforced in `src/proxy.ts`).
+- Onboarding: basics → avatar → quiz or voice → persona → town. Saved to `profiles` as you go.
+- Matching (`/api/matches`): real users whose home (locals) or current trip destination (visitors) is within 40 miles, scored by `src/lib/match.ts`, re-ranked by Claude. Friend groups are 3–4 people who all score well with each other.
+- Connections (`/api/connections`): saying hi records a yes. Contact details are only shared once **both** people say yes.
+- Paid APIs are rate-limited per user per day (`src/lib/server/session.ts`).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Promo video
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`npm run video` opens Remotion Studio; `npm run video:render` renders `marketing/*.mp4` (copy the widescreen one to `public/promo.mp4` for the landing page).

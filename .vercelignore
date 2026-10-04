@@ -1,0 +1,4 @@
+marketing/
+.claude/
+.env*
+!.env.example
