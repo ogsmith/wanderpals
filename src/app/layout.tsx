@@ -6,14 +6,22 @@ import "./globals.css";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const fredoka = Fredoka({ variable: "--font-fredoka", subsets: ["latin"] });
 
+// Absolute URLs for link previews (iMessage, WhatsApp, Slack…). Vercel sets the production domain at build time.
+const siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000";
+const pitch = "Make a little cartoon you. It wanders around town finding friends in your stage of life — and helps plan the hangout. Free, takes 3 minutes.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "Wanderpals — find your people",
-  description: "Build a little you, send it into town, and it comes back with friends who are in your season of life.",
+  description: pitch,
   openGraph: {
-    title: "Wanderpals — find your people",
-    description: "Send a little you out to find friends in your season of life.",
-    images: ["/promo-poster.jpg"],
+    type: "website",
+    siteName: "Wanderpals",
+    title: "Come be my Wanderpal 💛",
+    description: pitch,
+    images: [{ url: "/promo-poster.jpg", width: 1920, height: 1080, alt: "Two cartoon pals celebrating a new friendship" }],
   },
+  twitter: { card: "summary_large_image", title: "Come be my Wanderpal 💛", description: pitch, images: ["/promo-poster.jpg"] },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

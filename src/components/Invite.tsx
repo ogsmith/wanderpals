@@ -9,8 +9,14 @@ export function inviteLink(userId: string) {
   return `${window.location.origin}/?ref=${encodeURIComponent(userId)}`;
 }
 
+/** The pitch that goes out with every invite — why it's worth 3 minutes, then the link. */
 export function inviteMessage(link: string) {
-  return `I made a little cartoon me that wanders around town finding friends 😄 Make yours on Wanderpals and our pals can meet: ${link}`;
+  return [
+    "Hey! I'm on Wanderpals 🐾",
+    "You make a little cartoon version of yourself, tell it what you're into, and it wanders around town finding people in the same stage of life — then helps plan hangouts.",
+    "It's free and takes about 3 minutes. Join me so our pals can meet 💛",
+    link,
+  ].join("\n\n");
 }
 
 /**
@@ -21,25 +27,34 @@ export function InviteModal({ userId, me, sent, onClose, onSent }: { userId: str
   // Browser-only values, read once (safe if this ever renders on the server).
   const [link] = useState(() => (typeof window === "undefined" ? "" : inviteLink(userId)));
   const [canShare] = useState(() => typeof navigator !== "undefined" && !!navigator.share);
-  const text = inviteMessage(link);
+  const [text, setText] = useState(() => inviteMessage(link));
   const [copied, setCopied] = useState(false);
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center p-4 bg-[#1d2433]/55 backdrop-blur-sm fade-in" onClick={onClose} role="dialog" aria-modal aria-label="Invite friends">
-      <div className="celebrate-card w-full max-w-md rounded-[2rem] bg-card border-4 border-accent shadow-2xl p-6 space-y-4 text-center" onClick={(e) => e.stopPropagation()}>
+      <div className="celebrate-card w-full max-w-md max-h-[92vh] overflow-auto rounded-[2rem] bg-card border-4 border-accent shadow-2xl p-6 space-y-4 text-center" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-center">
-          <Avatar look={me} size={120} waving />
+          <Avatar look={me} size={96} waving />
         </div>
         <h2 className="font-display text-3xl font-bold leading-tight">Bring your friends to town!</h2>
         <p className="text-muted">Everyone you invite shows up as someone who already wants to meet you — one tap and you&apos;re pals.</p>
         <PetProgress sent={sent} />
+        <label className="block text-left space-y-1">
+          <span className="text-xs font-semibold text-muted">Your message (edit it if you like)</span>
+          <textarea className="input !text-sm min-h-40 leading-snug" value={text} onChange={(e) => setText(e.target.value)} />
+        </label>
+        {link && !text.includes(link) && (
+          <button className="text-xs underline text-brand" onClick={() => setText((t) => `${t.trim()}\n\n${link}`)}>
+            Your link is missing — add it back
+          </button>
+        )}
 
         {canShare && (
           <button
             className="btn w-full"
             onClick={() =>
               navigator
-                .share({ title: "Wanderpals", text, url: link })
+                .share({ title: "Join me on Wanderpals", text }) // link lives inside the text so apps can't drop the blurb
                 .then(onSent)
                 .catch(() => {})
             }
@@ -66,10 +81,9 @@ export function InviteModal({ userId, me, sent, onClose, onSent }: { userId: str
               onSent();
             }}
           >
-            {copied ? "Copied ✓" : "🔗 Copy link"}
+            {copied ? "Copied ✓" : "📋 Copy message"}
           </button>
         </div>
-        <div className="rounded-xl bg-bg px-3 py-2 text-xs text-muted break-all text-left">{text}</div>
         <button className="text-sm underline text-muted" onClick={onClose}>
           Done
         </button>
