@@ -41,6 +41,9 @@ export async function DELETE() {
   await sql`delete from trips where user_id = ${me}`;
   await sql`delete from hangouts where host = ${me}`;
   await sql`delete from hangout_people where user_id = ${me}`;
+  await sql`delete from presence where user_id = ${me}`;
+  await sql`delete from spot_members where user_id = ${me}`;
+  await sql`delete from messages where from_user = ${me}`;
   await sql`delete from decisions where from_user = ${me} or to_user = ${me}`;
   await sql`delete from profiles where user_id = ${me}`;
   return Response.json({ ok: true });

@@ -71,3 +71,32 @@ export const meAsSomeone = (s: AppState) => ({
 });
 
 export const homeLabel = (b: Basics) => b.location?.label?.split(",")[0] || "your town";
+
+/* ------------------------------ live town ------------------------------ */
+
+export const SPOTS = {
+  cafe: { label: "Café", emoji: "☕", blurb: "grab a virtual coffee" },
+  taphouse: { label: "Tap House", emoji: "🍺", blurb: "split a pitcher" },
+  arcade: { label: "Arcade", emoji: "🎮", blurb: "play a few rounds" },
+  park: { label: "Park", emoji: "🌳", blurb: "hang out on a picnic blanket" },
+} as const;
+export type SpotKind = keyof typeof SPOTS;
+
+/** Where your pal is: out in town, or inside a hang spot. */
+export type LivePlace = "town" | `spot:${string}`;
+
+/** Someone online right now, and where their pal is standing. */
+export type LivePerson = Townsperson & { x: number; y: number };
+
+export type ChatMessage = { id: string; from: string; name: string; body: string; at: string };
+
+export type SpotInvite = { id: string; kind: SpotKind; from: Townsperson };
+export type SpotInfo = { id: string; kind: SpotKind; members: Townsperson[] };
+
+/** What a presence heartbeat returns. */
+export type LiveState = { people: LivePerson[]; invites: SpotInvite[]; spot: SpotInfo | null };
+
+/** How close (in town %-units, y counts extra since the scene is wide) two pals must be to chat. */
+export const NEAR = 14;
+export const nearDistance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, (a.y - b.y) * 1.6);
+export const dmConv = (a: string, b: string) => `dm:${[a, b].sort().join("|")}`;

@@ -14,7 +14,7 @@ export async function currentUserId(): Promise<string | null> {
 }
 
 /** Per-user daily caps on the calls that cost money (Claude, Google Maps). */
-const LIMITS = { ai: 60, places: 600, hangouts: 20 } as const;
+const LIMITS = { ai: 60, places: 600, hangouts: 20, chat: 1000, spots: 50 } as const;
 
 export async function withinLimit(userId: string, kind: keyof typeof LIMITS): Promise<boolean> {
   const rows = (await sql`

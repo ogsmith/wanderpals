@@ -56,6 +56,54 @@ export function ensureSchema() {
     )`;
     await sql`create index if not exists hangout_people_user on hangout_people (user_id)`;
     await sql`alter table hangout_people add column if not exists invited_by text`;
+    // ---- live town: presence, chat, hang spots, safety ----
+    await sql`create table if not exists presence (
+      user_id text primary key,
+      place text not null default 'town',
+      x real not null default 50,
+      y real not null default 75,
+      lat double precision,
+      lng double precision,
+      updated_at timestamptz not null default now()
+    )`;
+    await sql`create index if not exists presence_live on presence (updated_at)`;
+    await sql`create table if not exists messages (
+      id bigserial primary key,
+      conv text not null,
+      from_user text not null,
+      body text not null,
+      created_at timestamptz not null default now()
+    )`;
+    await sql`create index if not exists messages_conv on messages (conv, id)`;
+    await sql`create table if not exists spots (
+      id bigserial primary key,
+      kind text not null check (kind in ('cafe', 'taphouse', 'arcade', 'park')),
+      created_by text not null,
+      created_at timestamptz not null default now()
+    )`;
+    await sql`create table if not exists spot_members (
+      spot_id bigint not null references spots (id) on delete cascade,
+      user_id text not null,
+      status text not null check (status in ('invited', 'joined', 'left', 'declined')),
+      invited_by text,
+      updated_at timestamptz not null default now(),
+      primary key (spot_id, user_id)
+    )`;
+    await sql`create index if not exists spot_members_user on spot_members (user_id, status)`;
+    await sql`create table if not exists blocks (
+      blocker text not null,
+      blocked text not null,
+      created_at timestamptz not null default now(),
+      primary key (blocker, blocked)
+    )`;
+    await sql`create table if not exists reports (
+      id bigserial primary key,
+      reporter text not null,
+      reported text not null,
+      reason text not null default '',
+      context text not null default '',
+      created_at timestamptz not null default now()
+    )`;
     await sql`create table if not exists usage (
       user_id text not null,
       day date not null default current_date,

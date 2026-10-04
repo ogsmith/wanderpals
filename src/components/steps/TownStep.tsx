@@ -5,13 +5,15 @@ import Avatar from "@/components/Avatar";
 import Celebration, { type Celebrate } from "@/components/Celebration";
 import GroupCard from "@/components/GroupCard";
 import Hangouts, { titleFor, type Draft } from "@/components/Hangouts";
+import { ChatPanel, recentLines, SpotScene, useChat } from "@/components/Live";
+import { placeCoords } from "@/lib/towns";
 import { commonGround } from "@/lib/common";
 import LocationInput from "@/components/LocationInput";
 import MatchCard, { ContactLinks, CopyButton } from "@/components/MatchCard";
 import Pet from "@/components/Pet";
 import { Scenery, SpeechBubble, type Bubble } from "@/components/TownScene";
 import { pick, seeded } from "@/lib/palette";
-import { homeLabel, meAsSomeone, type AppState, type Connections, type Found, type Trip } from "@/lib/state";
+import { homeLabel, meAsSomeone, NEAR, nearDistance, SPOTS, type AppState, type LivePlace, type LiveState, type SpotKind, type Connections, type Found, type Trip } from "@/lib/state";
 import { buddy, type Group, type Match, type Search, type Townsperson } from "@/lib/types";
 
 type Pos = { x: number; y: number; moving: boolean; flip: boolean; dur: number };
@@ -294,6 +296,7 @@ export default function TownStep({
   const heldRef = useRef(false);
   const interruptRef = useRef(false);
   const commandRef = useRef<Command | null>(null);
+  const chattingRef = useRef(false); // true while chatting with someone nearby or inside a hang spot
   const hasData = !!data;
   const nudgeRef = useRef(nudgeInvites);
   useEffect(() => {
@@ -414,6 +417,8 @@ export default function TownStep({
       while (alive.current) {
         // Being held? Wait to be put down.
         while (alive.current && heldRef.current) await new Promise((r) => setTimeout(r, 80));
+        // Chatting with someone (or inside a hang spot)? Stay put until you're done — unless you send your pal somewhere.
+        while (alive.current && chattingRef.current && !commandRef.current && !heldRef.current) await new Promise((r) => setTimeout(r, 300));
         if (!alive.current) return;
         interruptRef.current = false;
         const t = tripRef.current!;
@@ -522,6 +527,69 @@ export default function TownStep({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the pet follows the pal's position
     setPetAt({ x: me.x + (me.flip ? 4.5 : -4.5), y: me.y, dur: me.dur });
   }, [me, held]);
+
+  /* ------------------------- live: who's online, chat, hang spots ------------------------- */
+
+  const [place, setPlace] = useState<LivePlace>("town");
+  const [live, setLive] = useState<{ state: LiveState; prev: Record<string, { x: number; y: number }>; at: number }>({
+    state: { people: [], invites: [], spot: null },
+    prev: {},
+    at: 0,
+  });
+  const center = useMemo(() => placeCoords(search.mode === "trip" ? search.destination : state.basics.location), [search, state.basics.location]);
+  useEffect(() => {
+    if (!hasData) return;
+    let alive = true;
+    // Heartbeat: tell the server where your pal is; hear who's around. (~2s; fine for a small town — swap for websockets at scale.)
+    const beat = async () => {
+      const r = await fetch("/api/live", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ place, x: posRef.current.x, y: posRef.current.y, lat: center?.[0] ?? null, lng: center?.[1] ?? null }),
+      }).catch(() => null);
+      if (!alive || !r?.ok) return;
+      const next = (await r.json()) as LiveState;
+      setLive((l) => ({ state: next, prev: Object.fromEntries(l.state.people.map((p) => [p.id, { x: p.x, y: p.y }])), at: Date.now() }));
+      if (place !== "town" && !next.spot) setPlace("town");
+    };
+    beat();
+    const t = setInterval(beat, 2000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [hasData, place, center]);
+
+  const liveTown = place === "town" ? live.state.people : [];
+  const liveIds = new Set(liveTown.map((p) => p.id));
+  // The online person your pal is standing next to (if any) — that's who you can chat with.
+  // Only once your pal has stopped: while walking, `me` already holds the destination, not where they are.
+  const nearby = (me.moving || held ? [] : liveTown)
+    .map((p) => ({ p, d: nearDistance(me, p) }))
+    .filter((o) => o.d <= NEAR)
+    .sort((a, c) => a.d - c.d)[0]?.p;
+  const nearbyId = nearby?.id;
+  useEffect(() => {
+    chattingRef.current = !!nearbyId || place !== "town";
+    if (nearbyId) interruptRef.current = true; // stop and say hi
+  }, [nearbyId, place]);
+  const dm = useChat(nearby && place === "town" ? { with: nearby.id } : null);
+  const spotChat = useChat(place !== "town" && live.state.spot ? { spot: live.state.spot.id } : null);
+  const lines = recentLines(place === "town" ? dm.messages : spotChat.messages, live.at);
+
+  const spotCall = async (body: Record<string, unknown>) => {
+    const r = await fetch("/api/live/spot", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      alert(d.error ?? "Something went wrong");
+      return null;
+    }
+    return d as { place?: LivePlace };
+  };
+  const goSpot = async (kind: SpotKind, invite: string[]) => {
+    const d = await spotCall({ action: "create", kind, invite });
+    if (d?.place) setPlace(d.place);
+  };
   const toScene = (clientX: number, clientY: number) => {
     const rect = sceneRef.current!.getBoundingClientRect();
     return { x: ((clientX - rect.left) / rect.width) * 100, y: ((clientY - rect.top) / rect.height) * 100 };
@@ -705,12 +773,40 @@ export default function TownStep({
 
   return (
     <div className="space-y-6">
+      {place === "town" &&
+        live.state.invites.map((inv) => (
+          <div key={inv.id} className="rise card !border-brand !bg-brand/5 flex flex-wrap items-center gap-3">
+            <Avatar look={inv.from.look} size={60} waving />
+            <div className="flex-1 font-display text-lg font-semibold">
+              {inv.from.name} wants to go to the {SPOTS[inv.kind].label} {SPOTS[inv.kind].emoji} with you!
+            </div>
+            <button
+              className="btn"
+              onClick={async () => {
+                const d = await spotCall({ action: "join", id: inv.id });
+                if (d?.place) setPlace(d.place);
+              }}
+            >
+              Let&apos;s go!
+            </button>
+            <button className="btn-ghost" onClick={() => spotCall({ action: "decline", id: inv.id })}>
+              Not now
+            </button>
+          </div>
+        ))}
       {incomingCards}
       {pals}
       <Hangouts pals={connections.friends} me={state.look} draft={draft} onDraft={setDraft} />
       {header}
 
-      <div className="grid lg:grid-cols-[1fr_250px] gap-4">
+      <div className="grid lg:grid-cols-[1fr_280px] gap-4">
+        {place !== "town" ? (
+          live.state.spot ? (
+            <SpotScene kind={live.state.spot.kind} me={{ look: state.look, name: first }} members={live.state.spot.members} lines={lines} />
+          ) : (
+            <div className="grid place-items-center aspect-[16/10] rounded-3xl border-4 border-line text-muted">Walking over…</div>
+          )
+        ) : (
         <div
           ref={sceneRef}
           onClick={tapScene}
@@ -720,7 +816,33 @@ export default function TownStep({
           <div className="absolute top-2 left-2 z-[150] rounded-full bg-white/90 text-[#1d2433] text-xs font-bold px-3 py-1 shadow">
             {search.mode === "trip" ? "✈️" : "📍"} {cityLabel}
           </div>
-          {folks.map((f) => {
+          {liveTown.map((p) => {
+            const was = live.prev[p.id];
+            const moving = !!was && Math.hypot(was.x - p.x, was.y - p.y) > 0.5;
+            const flip = !!was && p.x < was.x;
+            const line = lines[p.id];
+            return (
+              <div
+                key={`live-${p.id}`}
+                className="absolute"
+                style={{ left: `${p.x}%`, top: `${p.y}%`, transform: "translate(-50%, -100%)", zIndex: Math.round(p.y), transition: "left 2000ms linear, top 2000ms linear" }}
+              >
+                {line && <SpeechBubble b={{ who: p.id, text: line }} x={p.x} />}
+                <div style={{ transform: flip ? "scaleX(-1)" : undefined }}>
+                  <Avatar look={p.look} size={58} walking={moving} waving={nearby?.id === p.id} className="w-[clamp(24px,4.6vw,38px)] h-auto" />
+                </div>
+                {p.look.pet && (
+                  <div className="absolute bottom-0" style={{ [flip ? "left" : "right"]: "85%", transform: flip ? "scaleX(-1)" : undefined }}>
+                    <Pet pet={p.look.pet} size={18} walking={moving} className="w-[clamp(14px,2.6vw,22px)] h-auto" />
+                  </div>
+                )}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-0.5 rounded-full bg-white/90 text-[#1d2433] text-[9px] px-1 font-bold whitespace-nowrap">
+                  <span className="text-good">●</span> {p.name}
+                </div>
+              </div>
+            );
+          })}
+          {folks.filter((f) => !liveIds.has(f.id)).map((f) => {
             const p = folkPos[f.id];
             if (!p) return null;
             const bb = bubbleFor(f.id);
@@ -782,7 +904,9 @@ export default function TownStep({
               onClick={(e) => e.stopPropagation()}
               aria-label={`Your pal. Drag to move ${b.him}.`}
             >
-              {bubbleFor("me") && <SpeechBubble b={bubbleFor("me")!} x={me.x} />}
+              {(bubbleFor("me") ?? (lines.me ? { who: "me", text: lines.me } : null)) && (
+                <SpeechBubble b={bubbleFor("me") ?? { who: "me", text: lines.me }} x={me.x} />
+              )}
               <div className={`absolute left-1/2 -translate-x-1/2 rounded-full bg-brand/60 blur-[2px] transition-all ${held ? "-bottom-4 w-6 h-1.5 opacity-40" : "-bottom-1 w-10 h-2"}`} />
               <div key={squish} className={held ? "held" : squish ? "land" : ""}>
                 <div style={{ transform: me.flip ? "scaleX(-1)" : undefined }}>
@@ -798,9 +922,85 @@ export default function TownStep({
             </div>
           )}
         </div>
+        )}
 
+        {place !== "town" && live.state.spot ? (
+          <aside className="card !p-4">
+            <ChatPanel
+              title={
+                <div className="font-display font-semibold">
+                  {SPOTS[live.state.spot.kind].emoji} {SPOTS[live.state.spot.kind].label}
+                  <span className="text-muted font-normal text-sm"> · {live.state.spot.members.length ? `with ${live.state.spot.members.map((m) => m.name).join(", ")}` : "waiting for your friend…"}</span>
+                </div>
+              }
+              messages={spotChat.messages}
+              error={spotChat.error}
+              onSend={spotChat.send}
+              footer={
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {connections.friends
+                    .filter((f) => !live.state.spot!.members.some((m) => m.id === f.id))
+                    .slice(0, 4)
+                    .map((f) => (
+                      <button key={f.id} className="chip !text-xs" onClick={() => spotCall({ action: "invite", id: live.state.spot!.id, invite: [f.id] })}>
+                        ＋ Bring {f.name}
+                      </button>
+                    ))}
+                  <button
+                    className="btn-ghost !py-1 !text-sm ml-auto"
+                    onClick={async () => {
+                      await spotCall({ action: "leave", id: live.state.spot!.id });
+                      setPlace("town");
+                    }}
+                  >
+                    🚪 Head back to town
+                  </button>
+                </div>
+              }
+            />
+          </aside>
+        ) : nearby ? (
+          <aside className="card !p-4 !border-good">
+            <ChatPanel
+              title={
+                <div className="flex items-center gap-2">
+                  <Avatar look={nearby.look} size={40} />
+                  <div className="min-w-0">
+                    <div className="font-display font-semibold leading-tight">{nearby.name}</div>
+                    <div className="text-xs text-good">● right next to your {b.noun}</div>
+                  </div>
+                </div>
+              }
+              person={nearby}
+              messages={dm.messages}
+              error={dm.error}
+              onSend={dm.send}
+              onGo={(kind) => goSpot(kind, [nearby.id])}
+              onBlocked={() => setLive((l) => ({ ...l, state: { ...l.state, people: l.state.people.filter((p) => p.id !== nearby.id) } }))}
+            />
+          </aside>
+        ) : (
         <aside className="card !p-4 space-y-3 max-h-[480px] overflow-auto">
           {data && <p className="text-xs text-muted rounded-xl bg-bg px-2 py-1.5">🖐️ Drag your pal anywhere · 👆 tap the town to send {b.him} somewhere</p>}
+          {liveTown.length > 0 && (
+            <div className="space-y-1.5">
+              <h3 className="font-display text-lg font-semibold">🟢 Online now</h3>
+              {liveTown.map((p) => (
+                <button
+                  key={p.id}
+                  className="w-full flex items-center gap-2 rounded-xl border-2 border-line hover:border-good px-2 py-1.5 text-sm text-left"
+                  onClick={() => {
+                    commandRef.current = { kind: "goto", x: clamp(p.x + (p.x > 50 ? -6 : 6), WALK.x0, WALK.x1), y: clamp(p.y, WALK.y0, WALK.y1) };
+                    interruptRef.current = true;
+                  }}
+                >
+                  <Avatar look={p.look} size={28} />
+                  <span className="flex-1 font-semibold">{p.name}</span>
+                  <span className="text-xs text-muted">walk over to chat →</span>
+                </button>
+              ))}
+            </div>
+          )}
           <h3 className="font-display text-lg font-semibold">Town diary</h3>
           {!diary.length && <p className="text-sm text-muted">Just got to town. Looking around…</p>}
           <ul className="space-y-1.5">
@@ -815,6 +1015,7 @@ export default function TownStep({
             })}
           </ul>
         </aside>
+        )}
       </div>
 
       {data && (emptyTown || found.length > 0) && (
