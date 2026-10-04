@@ -24,7 +24,19 @@ function HairBack({ look }: { look: AvatarLook }) {
   const fill = shade(HAIR_COLORS[look.hair], -14);
   switch (look.hairStyle) {
     case "long":
+    case "bangs":
       return <rect x={11} y={14} width={78} height={66} rx={28} fill={fill} />;
+    case "bob":
+      return <rect x={11} y={14} width={78} height={50} rx={24} fill={fill} />;
+    case "wavy":
+      return (
+        <g fill={fill}>
+          <rect x={11} y={14} width={78} height={60} rx={26} />
+          {[[14, 68], [17, 80], [27, 86], [86, 68], [83, 80], [73, 86]].map(([cx, cy]) => (
+            <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={8} />
+          ))}
+        </g>
+      );
     case "ponytail":
       return (
         <g>
@@ -71,7 +83,40 @@ function HairFront({ look }: { look: AvatarLook }) {
           <path d={BANGS} />
         </g>
       );
-    default: // short, long, ponytail
+    case "bangs":
+      // Straight blunt fringe
+      return <path d="M16 44 Q13 6 50 6 Q87 6 84 44 L84 31 Q50 27 16 31 Z" fill={fill} />;
+    case "wavy":
+      // Side part on the other side, for a softer look
+      return <path d={BANGS} fill={fill} transform="translate(100 0) scale(-1 1)" />;
+    case "braid":
+      return (
+        <g fill={fill}>
+          <path d={BANGS} />
+          {[[80, 50], [83, 59], [84, 68], [84, 77], [83, 86]].map(([cx, cy]) => (
+            <circle key={cy} cx={cx} cy={cy} r={5.6} stroke={shade(fill, -25)} strokeWidth={1} />
+          ))}
+          <circle cx={83} cy={92} r={3.2} fill="#ff7d8f" />
+          <path d="M81 94 Q83 101 86 96" stroke={fill} strokeWidth={3} fill="none" strokeLinecap="round" />
+        </g>
+      );
+    case "puffs":
+      return (
+        <g fill={fill}>
+          <circle cx={21} cy={9} r={13} />
+          <circle cx={79} cy={9} r={13} />
+          <path d="M17 36 Q14 8 50 8 Q86 8 83 36 Q66 20 50 22 Q34 20 17 36 Z" />
+        </g>
+      );
+    case "pixie":
+      return (
+        <g fill={fill}>
+          <path d="M15 42 Q10 4 50 4 Q90 4 85 36 Q76 21 60 22 Q46 31 30 24 Q22 29 15 42 Z" />
+          <path d="M16 42 Q14 50 18 54 Q19 46 22 42 Z" />
+          <path d="M84 40 Q87 48 82 54 Q81 46 78 42 Z" />
+        </g>
+      );
+    default: // short, long, ponytail, bob
       return (
         <g>
           <path d={BANGS} fill={fill} />

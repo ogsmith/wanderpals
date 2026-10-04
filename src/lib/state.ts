@@ -64,4 +64,10 @@ export const INITIAL_STATE: AppState = {
   search: { mode: "home", who: "locals" },
 };
 
+/** You, in the same shape as other people, for "what do we have in common". */
+export const meAsSomeone = (s: AppState) => ({
+  lifeStageTags: [...new Set([...(s.persona?.lifeStageTags ?? []), ...s.basics.lifeStage])],
+  interests: s.persona?.interests ?? [],
+});
+
 export const homeLabel = (b: Basics) => b.location?.label?.split(",")[0] || "your town";

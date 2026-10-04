@@ -28,7 +28,7 @@ export const SKIN_TONES = {
   deep: "#6e432a",
 } as const;
 
-export const HAIR_STYLES = ["short", "spiky", "curly", "long", "ponytail", "pigtails", "bun", "bald"] as const;
+export const HAIR_STYLES = ["short", "spiky", "curly", "pixie", "bob", "long", "wavy", "bangs", "ponytail", "braid", "pigtails", "bun", "puffs", "bald"] as const;
 
 export type HairColor = keyof typeof HAIR_COLORS;
 export type EyeColor = keyof typeof EYE_COLORS;

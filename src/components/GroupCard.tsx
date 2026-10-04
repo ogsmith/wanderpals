@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Avatar from "@/components/Avatar";
 import { ContactLinks, CopyButton } from "@/components/MatchCard";
-import { homeLabel, type AppState, type Connections } from "@/lib/state";
+import { commonGround } from "@/lib/common";
+import { homeLabel, meAsSomeone, type AppState, type Connections } from "@/lib/state";
 import { buddy, type Group, type Townsperson } from "@/lib/types";
 
 /** A crew of 3–4. Saying hi asks each member separately; each one's contact unlocks when they say yes. */
@@ -29,6 +30,8 @@ export default function GroupCard({
   const ids = members.map((m) => m.id);
   const asked = ids.some((id) => connections.mine[id] === "yes");
   const passed = ids.every((id) => connections.mine[id] === "no");
+  // Worked out from the actual people every render, so it's never stale or overstated.
+  const why = [...commonGround([meAsSomeone(state), ...members]), `${firsts.join(", ")} get along with each other too`];
   const intro = `Hey ${names}! Our Wanderpals all bumped into each other and figured we'd make a good crew — I'm ${state.basics.name.split(" ")[0]} from ${homeLabel(state.basics)}. ${g.hangout} Who's in?`;
 
   return (
@@ -49,7 +52,7 @@ export default function GroupCard({
       </div>
 
       <ul className="flex flex-wrap gap-1.5">
-        {g.why.map((r) => (
+        {why.map((r) => (
           <li key={r} className="chip !text-xs">✓ {r}</li>
         ))}
       </ul>

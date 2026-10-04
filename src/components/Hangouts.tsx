@@ -2,10 +2,31 @@
 
 import { useEffect, useState } from "react";
 import Avatar from "@/components/Avatar";
+import { commonGround } from "@/lib/common";
 import type { Hangout, RSVP } from "@/lib/state";
 import type { AvatarLook, Townsperson } from "@/lib/types";
 
 export type Draft = { title: string; invite: string[] };
+
+/** A neutral title for a hang idea ("You both like beer — …" → "🍻 Drinks") that stays true when more people join. */
+export function titleFor(idea: string) {
+  const t = idea.toLowerCase();
+  const map: [RegExp, string][] = [
+    [/beer|pint|brewer|bar\b/, "🍻 Drinks"],
+    [/grill|cookout|bbq|smoker/, "🔥 Cookout"],
+    [/game night|co-op|gamer|board game/, "🎮 Game night"],
+    [/coffee|café|cafe/, "☕ Coffee"],
+    [/\brun\b|running/, "🏃 Run"],
+    [/golf|range|foursome/, "⛳ Golf"],
+    [/hike|trail/, "🥾 Hike"],
+    [/wine/, "🍷 Wine night"],
+    [/pizza|potluck|cook-off|dinner/, "🍕 Dinner"],
+    [/game\b|celtics|patriots|red sox|bruins/, "🏟️ Watch the game"],
+    [/fishing/, "🎣 Fishing"],
+    [/pickleball/, "🏓 Pickleball"],
+  ];
+  return map.find(([re]) => re.test(t))?.[1] ?? "🍻 Hang out";
+}
 
 const IDEAS = ["🍻 Drinks", "🔥 Cookout", "🎮 Game night", "☕ Coffee", "🏃 Run", "⛳ Golf", "🍕 Pizza night", "🥾 Hike"];
 
@@ -176,6 +197,9 @@ function HangoutCard({
   // Host, or anyone who's in (or maybe), can bring their own pals along.
   const canInvite = !past && (h.isHost || h.myStatus === "going" || h.myStatus === "maybe");
   const onList = new Set([h.host.id, ...h.people.map((p) => p.person.id)]);
+  // What this exact group has in common — updates as people are added or drop out.
+  const crew = [h.host, ...h.people.filter((p) => p.status !== "declined" && p.person.id !== h.host.id).map((p) => p.person)];
+  const common = commonGround(crew, 2);
   const invitable = pals.filter((p) => !onList.has(p.id));
   return (
     <div className={`rounded-3xl border-2 p-4 space-y-3 bg-card ${joined ? "border-brand" : "border-line"} ${past || h.myStatus === "declined" ? "opacity-60" : ""}`}>
@@ -198,6 +222,7 @@ function HangoutCard({
         </div>
       </div>
       {h.note && <p className="text-sm">&ldquo;{h.note}&rdquo;</p>}
+      {common.length > 0 && <p className="text-sm text-muted">🤝 {common.join(" · ")}</p>}
       <div className="flex items-end gap-1 flex-wrap">
         {going.map(({ person }) => (
           <div key={person.id} className="flex flex-col items-center" title={`${person.name} is going`}>

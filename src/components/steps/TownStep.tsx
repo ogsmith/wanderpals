@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Avatar from "@/components/Avatar";
 import Celebration, { type Celebrate } from "@/components/Celebration";
 import GroupCard from "@/components/GroupCard";
-import Hangouts, { type Draft } from "@/components/Hangouts";
+import Hangouts, { titleFor, type Draft } from "@/components/Hangouts";
+import { commonGround } from "@/lib/common";
 import LocationInput from "@/components/LocationInput";
 import MatchCard, { ContactLinks, CopyButton } from "@/components/MatchCard";
 import Pet from "@/components/Pet";
 import { Scenery, SpeechBubble, type Bubble } from "@/components/TownScene";
 import { pick, seeded } from "@/lib/palette";
-import { homeLabel, type AppState, type Connections, type Found, type Trip } from "@/lib/state";
+import { homeLabel, meAsSomeone, type AppState, type Connections, type Found, type Trip } from "@/lib/state";
 import { buddy, type Group, type Match, type Search, type Townsperson } from "@/lib/types";
 
 type Pos = { x: number; y: number; moving: boolean; flip: boolean; dur: number };
@@ -470,7 +471,7 @@ export default function TownStep({
             if (!done) continue;
             const members = due.g.memberIds.map(byId).filter((p): p is Townsperson => !!p);
             addDiary({ id: due.g.memberIds[0], text: `Found a crew: ${due.g.name}!`, match: true });
-            setCelebrate({ title: "You found a friend group!", name: due.g.name, line: due.g.why[0], hangout: due.g.hangout, people: members, targetId: due.g.id });
+            setCelebrate({ title: "You found a friend group!", name: due.g.name, line: commonGround([meAsSomeone(state), ...members])[0] ?? due.g.why[0], hangout: due.g.hangout, people: members, targetId: due.g.id });
             notifyFound(`Your ${b.noun} found a friend group: ${due.g.name}`);
           }
           addFound([revealId(due)]);
@@ -870,7 +871,7 @@ export default function TownStep({
                       mine={connections.mine[p.id]}
                       contact={connections.contacts[p.id]}
                       onDecide={(d) => onDecide([p.id], d)}
-                      onPlan={() => setDraft({ title: r.m.hangout.split(/[—.]/)[0].slice(0, 60), invite: [p.id] })}
+                      onPlan={() => setDraft({ title: titleFor(r.m.hangout), invite: [p.id] })}
                     />
                   )
                 );

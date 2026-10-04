@@ -1,3 +1,4 @@
+import { commonGround } from "./common";
 import { milesBetweenCoords } from "./towns";
 import { buddy, type Group, type Match, type Me, type Search, type Townsperson } from "./types";
 
@@ -204,16 +205,16 @@ export function heuristicGroups(me: Me, ranked: Ranked[], search: Search, center
       xs.flat().forEach((x) => counts.set(norm(x), (counts.get(norm(x)) ?? 0) + 1));
       return [...counts.entries()].filter(([, n]) => n >= min).sort((a, b) => b[1] - a[1]).map(([x]) => x);
     };
-    const sharedStage = atLeast(everyone.map((p) => p.lifeStage.map(norm)), everyone.length - 1);
+    // The crew's name only claims a life stage if literally everyone shares it.
+    const sharedStage = atLeast(everyone.map((p) => p.lifeStage.map(norm)), everyone.length);
     const sharedInterests = atLeast(everyone.map((p) => p.interests.map(norm)), everyone.length - 1);
     const stageWord = STAGE_WORDS.find(([k]) => sharedStage.includes(k))?.[1];
     const interestWord = INTEREST_WORDS.find(([k]) => sharedInterests.some((s) => sameThing(s, k)))?.[1];
     const name = `The ${[stageWord, interestWord].filter(Boolean).join(" ") || (search.mode === "trip" ? `${city} Explorers` : "Neighborhood")} Crew`;
     const why = [
-      sharedStage.length ? `Everyone's ${sharedStage.slice(0, 2).join(" & ")}` : "",
-      sharedInterests.length ? `Most of you are into ${sharedInterests.slice(0, 3).join(", ")}` : "",
+      ...commonGround(everyone.map((p) => ({ lifeStageTags: p.lifeStage, interests: p.interests }))),
       `${members.map((m) => m.name).join(", ")} get along with each other too`,
-    ].filter(Boolean);
+    ];
     groups.push({ id: `grp-${c.ids.join("-")}`, memberIds: c.ids, score: Math.round(Math.min(99, c.score)), name, why, hangout: hangoutFor(sharedInterests, sharedStage, true) });
   }
   return groups;
