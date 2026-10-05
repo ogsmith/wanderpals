@@ -81,7 +81,7 @@ export async function visibleHangouts(me: string, onlyId?: string): Promise<Hang
         invitedMeBy: mine?.invited_by && mine.invited_by !== r.host ? byId.get(mine.invited_by)?.name : undefined,
         people: people
           .filter((p) => p.hangout_id === r.id && byId.has(p.user_id))
-          .map((p) => ({ person: byId.get(p.user_id)!, status: p.status, invitedBy: p.invited_by ? byId.get(p.invited_by)?.name : undefined })),
+          .map((p) => ({ person: byId.get(p.user_id)!, status: p.status, invitedBy: p.invited_by ? byId.get(p.invited_by)?.name : undefined, isYou: p.user_id === me })),
         proposals: proposals
           .filter((p) => p.hangout_id === r.id && byId.has(p.proposer))
           .map((p) => ({

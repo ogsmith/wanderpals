@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Avatar from "@/components/Avatar";
+import { CalendarCard, useAvailability, WhoIsFree } from "@/components/Calendar";
+import { isFree, type Busy } from "@/lib/availability";
 import { commonGround } from "@/lib/common";
 import type { Hangout, Proposal, RSVP } from "@/lib/state";
 import type { AvatarLook, Townsperson } from "@/lib/types";
@@ -137,6 +139,11 @@ function ChangeForm({ h, mode, onSubmit, onClose }: { h: Hangout; mode: "suggest
           ))}
         </div>
         <input className="input !py-2 !text-sm" type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} />
+        <WhoIsFree
+          time={time}
+          people={[...(h.isHost ? [] : [h.host]), ...h.people.filter((p) => !p.isYou && p.person.id !== h.host.id && p.status !== "declined").map((p) => p.person)]}
+          onPick={setTime}
+        />
       </div>
       <div className="grid sm:grid-cols-2 gap-2">
         <label className="space-y-1">
@@ -264,6 +271,7 @@ function PlanModal({ pals, draft, onClose, onCreated }: { pals: Townsperson[]; d
             <input className="input" type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} required />
           </label>
         </div>
+        <WhoIsFree time={startsAt} people={pals.filter((p) => invite.includes(p.id))} onPick={setStartsAt} />
         <label className="block space-y-1">
           <span className="text-sm font-semibold">Note <span className="text-muted font-normal">(optional)</span></span>
           <input className="input" value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="I'll grab a big table 🍻" />
@@ -317,7 +325,9 @@ function HangoutCard({
   onPropose,
   onProposal,
   onEdit,
+  meBusy,
 }: {
+  meBusy?: Busy;
   onPropose: (c: ChangeDraft) => void;
   onProposal: (id: string, action: "vote" | "unvote" | "withdraw" | "accept" | "dismiss") => void;
   onEdit: (c: ChangeDraft) => void;
@@ -369,6 +379,9 @@ function HangoutCard({
         </div>
       </div>
       {h.note && <p className="text-sm">&ldquo;{h.note}&rdquo;</p>}
+      {!past && h.myStatus !== "declined" && isFree(meBusy, new Date(h.startsAt)) === false && (
+        <p className="text-sm rounded-xl bg-red-500/10 text-red-700 dark:text-red-300 px-3 py-1.5">⚠️ Your calendar shows something around then.{!h.isHost && " Suggest another time?"}</p>
+      )}
       {common.length > 0 && <p className="text-sm text-muted">🤝 {common.join(" · ")}</p>}
       <div className="flex items-end gap-1 flex-wrap">
         {going.map(({ person }) => (
@@ -503,6 +516,8 @@ export default function Hangouts({ pals, me, draft, onDraft }: { pals: Townspers
   const [hangouts, setHangouts] = useState<Hangout[] | null>(null);
   const [error, setError] = useState("");
   const [now, setNow] = useState(0);
+  const [calVersion, setCalVersion] = useState(0);
+  const mine = useAvailability([], calVersion);
 
   useEffect(() => {
     const load = () =>
@@ -536,6 +551,7 @@ export default function Hangouts({ pals, me, draft, onDraft }: { pals: Townspers
           </button>
         )}
       </div>
+      <CalendarCard onChange={() => setCalVersion((v) => v + 1)} />
       {hangouts && !upcoming.length && (
         <div className="flex items-center gap-3 text-sm text-muted">
           <Avatar look={me} size={48} />
@@ -558,6 +574,7 @@ export default function Hangouts({ pals, me, draft, onDraft }: { pals: Townspers
               act(callProposals("PATCH", { id, action }));
             }}
             onEdit={(edit) => act(call("PATCH", { id: h.id, edit }))}
+            meBusy={mine?.busy.me}
             onCancel={() => confirm(`Cancel "${h.title}"? Everyone invited will stop seeing it.`) && act(call("DELETE", undefined, `?id=${h.id}`))}
           />
         ))}

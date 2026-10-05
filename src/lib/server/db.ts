@@ -124,6 +124,22 @@ export function ensureSchema() {
       context text not null default '',
       created_at timestamptz not null default now()
     )`;
+    // ---- calendars: only busy times are stored, never event details ----
+    await sql`create table if not exists calendars (
+      user_id text primary key,
+      kind text not null check (kind in ('google', 'ics')),
+      ics_url_enc text,
+      share_with_pals boolean not null default true,
+      connected_at timestamptz not null default now(),
+      synced_at timestamptz,
+      error text
+    )`;
+    await sql`create table if not exists busy (
+      user_id text not null,
+      starts timestamptz not null,
+      ends timestamptz not null
+    )`;
+    await sql`create index if not exists busy_user on busy (user_id, starts)`;
     await sql`create table if not exists usage (
       user_id text not null,
       day date not null default current_date,

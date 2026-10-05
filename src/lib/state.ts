@@ -62,7 +62,7 @@ export type Hangout = {
   isHost: boolean;
   myStatus: RSVP | null;
   invitedMeBy?: string; // first name of whoever invited you
-  people: { person: Townsperson; status: RSVP; invitedBy?: string }[]; // invitedBy = first name of whoever brought them
+  people: { person: Townsperson; status: RSVP; invitedBy?: string; isYou?: boolean }[]; // invitedBy = first name of whoever brought them
   proposals: Proposal[]; // open suggestions, most-voted first
   changed?: { at: string; note: string }; // last time the host changed the plan (and what changed)
 };

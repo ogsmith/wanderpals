@@ -77,6 +77,14 @@ export default function AppPage() {
       .catch(() => setLoadError(true));
     json<{ ai: boolean }>("/api/status").then((d) => setAi(d.ai)).catch(() => setAi(false));
 
+    // Back from Google with calendar (free/busy) permission? Finish connecting.
+    if (new URLSearchParams(window.location.search).get("calendar") === "google") {
+      window.history.replaceState(null, "", "/app");
+      fetch("/api/calendar", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "google" }) })
+        .then(() => window.dispatchEvent(new Event("wanderpals:calendar")))
+        .catch(() => {});
+    }
+
     // Arrived via a friend's invite link? They've already said yes to you.
     let ref: string | null = null;
     try {
