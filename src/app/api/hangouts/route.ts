@@ -1,5 +1,5 @@
 import { sql } from "@/lib/server/db";
-import { palIds, visibleHangouts } from "@/lib/server/hangouts";
+import { applyChange, palIds, visibleHangouts } from "@/lib/server/hangouts";
 import { currentUserId, tooMany, unauthorized, withinLimit } from "@/lib/server/session";
 
 const bad = (error: string) => Response.json({ error }, { status: 400 });
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const me = await currentUserId();
   if (!me) return unauthorized();
-  const { id, status, invite, remove } = (await req.json().catch(() => ({}))) as { id?: string; status?: string; invite?: unknown; remove?: unknown };
+  const { id, status, invite, remove, edit } = (await req.json().catch(() => ({}))) as { id?: string; status?: string; invite?: unknown; remove?: unknown; edit?: unknown };
   if (!id || !/^\d+$/.test(id)) return bad("Invalid hangout");
   const [visible] = await visibleHangouts(me, id);
   if (!visible) return Response.json({ error: "That hangout isn't available" }, { status: 404 });
@@ -59,6 +59,16 @@ export async function PATCH(req: Request) {
     if (!ids.length || ids.some((x) => !pals.has(x))) return bad("You can only invite your own pals");
     for (const pal of ids)
       await sql`insert into hangout_people (hangout_id, user_id, status, invited_by) values (${id}::bigint, ${pal}, 'invited', ${me}) on conflict do nothing`;
+    return Response.json({ hangouts: await visibleHangouts(me) });
+  }
+
+  if (edit && typeof edit === "object") {
+    if (!visible.isHost) return bad("Only the host can edit — suggest a change instead");
+    const e = edit as Record<string, unknown>;
+    const startsAt = typeof e.startsAt === "string" && e.startsAt ? new Date(e.startsAt) : null;
+    if (startsAt && (Number.isNaN(startsAt.getTime()) || startsAt.getTime() < Date.now() - 3600_000)) return bad("Pick a time in the future");
+    const title = clean(e.title, 80);
+    await applyChange(id, me, { title: title || undefined, place: typeof e.place === "string" ? clean(e.place, 120) : undefined, startsAt: startsAt?.toISOString(), note: typeof e.note === "string" ? clean(e.note, 500) : undefined }, []);
     return Response.json({ hangouts: await visibleHangouts(me) });
   }
 

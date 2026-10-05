@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Avatar from "@/components/Avatar";
 import { commonGround } from "@/lib/common";
-import type { Hangout, RSVP } from "@/lib/state";
+import type { Hangout, Proposal, RSVP } from "@/lib/state";
 import type { AvatarLook, Townsperson } from "@/lib/types";
 
 export type Draft = { title: string; invite: string[] };
@@ -70,6 +70,141 @@ function downloadIcs(h: Hangout) {
   a.download = `${h.title.replace(/[^\w ]+/g, "").trim() || "hangout"}.ics`;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+/** Date → value for <input type="datetime-local"> (local time). */
+const toLocalInput = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+/** One-tap alternatives: tomorrow night, this weekend, next Friday. */
+function quickTimes(): { label: string; value: string }[] {
+  const at = (daysAhead: number, h: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + daysAhead);
+    d.setHours(h, 0, 0, 0);
+    return d;
+  };
+  const today = new Date().getDay();
+  const untilSat = (6 - today + 7) % 7 || 7;
+  const untilFri = ((5 - today + 7) % 7 || 7) + 7;
+  return [
+    { label: "Tomorrow 7pm", value: toLocalInput(at(1, 19)) },
+    { label: "Sat 2pm", value: toLocalInput(at(untilSat, 14)) },
+    { label: "Sun 11am", value: toLocalInput(at(untilSat + 1, 11)) },
+    { label: "Next Fri 7pm", value: toLocalInput(at(untilFri, 19)) },
+  ];
+}
+
+async function callProposals(method: string, body: unknown) {
+  const r = await fetch("/api/hangouts/proposals", { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error ?? "Something went wrong");
+  return d.hangouts as Hangout[];
+}
+
+export type ChangeDraft = { startsAt?: string; place?: string; title?: string; note?: string };
+
+/** Suggest (or, for the host, make) a change: a different time, place and/or idea. */
+function ChangeForm({ h, mode, onSubmit, onClose }: { h: Hangout; mode: "suggest" | "edit"; onSubmit: (c: ChangeDraft) => void; onClose: () => void }) {
+  const [quick] = useState(quickTimes);
+  const [time, setTime] = useState(mode === "edit" ? toLocalInput(new Date(h.startsAt)) : "");
+  const [place, setPlace] = useState(mode === "edit" ? h.place : "");
+  const [title, setTitle] = useState(mode === "edit" ? h.title : "");
+  const [note, setNote] = useState("");
+  const anything = time || place.trim() || title.trim();
+  return (
+    <form
+      className="rounded-2xl border-2 border-dashed border-brand/50 p-3 space-y-2.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!anything) return;
+        onSubmit({
+          startsAt: time ? new Date(time).toISOString() : undefined,
+          place: place.trim() || undefined,
+          title: title.trim() || undefined,
+          note: note.trim() || undefined,
+        });
+      }}
+    >
+      <div className="text-sm font-semibold">{mode === "edit" ? "✏️ Change the plan" : "💡 Suggest a change"}</div>
+      <div className="space-y-1">
+        <span className="text-xs font-semibold text-muted">{mode === "edit" ? "When" : "A different time?"}</span>
+        <div className="flex flex-wrap gap-1.5">
+          {quick.map((q) => (
+            <button type="button" key={q.label} className="chip !text-xs !py-1" data-on={time === q.value} onClick={() => setTime(time === q.value ? "" : q.value)}>
+              {q.label}
+            </button>
+          ))}
+        </div>
+        <input className="input !py-2 !text-sm" type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} />
+      </div>
+      <div className="grid sm:grid-cols-2 gap-2">
+        <label className="space-y-1">
+          <span className="text-xs font-semibold text-muted">{mode === "edit" ? "Where" : "Somewhere else?"}</span>
+          <input className="input !py-2 !text-sm" value={place} maxLength={120} onChange={(e) => setPlace(e.target.value)} placeholder={h.place || "e.g. Idle Hands"} />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs font-semibold text-muted">{mode === "edit" ? "What" : "A different idea?"}</span>
+          <input className="input !py-2 !text-sm" value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder={h.title} list={`ideas-${h.id}`} />
+          <datalist id={`ideas-${h.id}`}>
+            {IDEAS.map((i) => (
+              <option key={i} value={i} />
+            ))}
+          </datalist>
+        </label>
+      </div>
+      {mode === "suggest" && (
+        <input className="input !py-2 !text-sm" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional) — e.g. busy Friday, weekend works!" />
+      )}
+      <div className="flex gap-2 justify-end">
+        <button type="button" className="btn-ghost !py-1.5 !text-sm" onClick={onClose}>
+          Cancel
+        </button>
+        <button className="btn !py-1.5 !px-4 !text-base" disabled={!anything}>
+          {mode === "edit" ? "Save changes" : "Suggest it"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** One open suggestion: what changes, who's 👍, and the host's "Use this". */
+function ProposalRow({ p, h, onAction }: { p: Proposal; h: Hangout; onAction: (action: "vote" | "unvote" | "withdraw" | "accept" | "dismiss") => void }) {
+  const bits = [p.startsAt && `📅 ${when(p.startsAt)}`, p.place && `📍 ${p.place}`, p.title && `✨ ${p.title}`].filter(Boolean);
+  return (
+    <div className="rounded-2xl bg-bg border-2 border-line p-2.5 space-y-1.5">
+      <div className="flex items-start gap-2">
+        <Avatar look={p.proposer.look} size={34} />
+        <div className="flex-1 min-w-0 text-sm">
+          <div>
+            <b>{p.mine ? "You" : p.proposer.name}</b> suggested: <span className="font-semibold">{bits.join(" · ")}</span>
+          </div>
+          {p.note && <div className="text-muted">&ldquo;{p.note}&rdquo;</div>}
+          {p.votes > 0 && <div className="text-xs text-muted">👍 {p.voters.join(", ")}</div>}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5 items-center">
+        <button className="chip !text-xs !py-1" data-on={p.iVoted} onClick={() => onAction(p.iVoted ? "unvote" : "vote")}>
+          👍 Works for me{p.votes ? ` · ${p.votes}` : ""}
+        </button>
+        {h.isHost && (
+          <>
+            <button className="btn !py-1 !px-3 !text-sm" onClick={() => onAction("accept")}>
+              ✓ Use this
+            </button>
+            <button className="text-xs underline text-muted" onClick={() => onAction("dismiss")}>
+              Dismiss
+            </button>
+          </>
+        )}
+        {p.mine && !h.isHost && (
+          <button className="text-xs underline text-muted ml-auto" onClick={() => onAction("withdraw")}>
+            Withdraw
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 async function call(method: string, body?: unknown, query = "") {
@@ -179,7 +314,13 @@ function HangoutCard({
   onCancel,
   onInvite,
   onRemove,
+  onPropose,
+  onProposal,
+  onEdit,
 }: {
+  onPropose: (c: ChangeDraft) => void;
+  onProposal: (id: string, action: "vote" | "unvote" | "withdraw" | "accept" | "dismiss") => void;
+  onEdit: (c: ChangeDraft) => void;
   h: Hangout;
   now: number;
   pals: Townsperson[];
@@ -189,6 +330,7 @@ function HangoutCard({
   onRemove: (id: string) => void;
 }) {
   const [picking, setPicking] = useState(false);
+  const [changing, setChanging] = useState<null | "suggest" | "edit">(null);
   const going = h.people.filter((p) => p.status === "going");
   const maybe = h.people.filter((p) => p.status === "maybe");
   const invited = h.people.filter((p) => p.status === "invited");
@@ -202,7 +344,7 @@ function HangoutCard({
   const common = commonGround(crew, 2);
   const invitable = pals.filter((p) => !onList.has(p.id));
   return (
-    <div className={`rounded-3xl border-2 p-4 space-y-3 bg-card ${joined ? "border-brand" : "border-line"} ${past || h.myStatus === "declined" ? "opacity-60" : ""}`}>
+    <div className={`rounded-3xl border-2 p-4 space-y-3 bg-card ${joined ? "border-brand" : "border-line"} ${past ? "opacity-60" : ""}`}>
       <div className="flex items-start gap-3">
         <div className="text-center rounded-2xl bg-brand text-white px-3 py-1.5 leading-tight shrink-0">
           <div className="text-[10px] font-bold uppercase">{new Date(h.startsAt).toLocaleString(undefined, { month: "short" })}</div>
@@ -219,6 +361,11 @@ function HangoutCard({
             {h.open && " · open to pals"}
           </div>
           {h.myStatus === "invited" && h.invitedMeBy && <div className="mt-1 inline-block rounded-full bg-accent/40 px-2 py-0.5 text-xs font-semibold">💌 {h.invitedMeBy} invited you</div>}
+          {h.changed?.note && now - new Date(h.changed.at).getTime() < 4 * 864e5 && (
+            <div className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${h.myStatus === "invited" && h.changed.note.includes("time") ? "bg-brand text-white" : "bg-good/20"}`}>
+              🔄 {h.myStatus === "invited" && h.changed.note.includes("time") ? "New time — can you still make it?" : `Updated: new ${h.changed.note.split(",").join(" & ")}`}
+            </div>
+          )}
         </div>
       </div>
       {h.note && <p className="text-sm">&ldquo;{h.note}&rdquo;</p>}
@@ -255,6 +402,30 @@ function HangoutCard({
             </span>
           ))}
         </div>
+      )}
+      {h.proposals.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-xs font-semibold text-muted uppercase tracking-wide">Suggested changes</div>
+          {h.proposals.map((p) => (
+            <ProposalRow key={p.id} p={p} h={h} onAction={(a) => onProposal(p.id, a)} />
+          ))}
+        </div>
+      )}
+      {!past && h.myStatus === "declined" && !h.proposals.some((p) => p.mine) && !changing && (
+        <button className="w-full rounded-2xl border-2 border-dashed border-brand/50 px-3 py-2 text-sm font-semibold text-brand hover:bg-brand/5" onClick={() => setChanging("suggest")}>
+          Busy? 💡 Suggest another time
+        </button>
+      )}
+      {changing && (
+        <ChangeForm
+          h={h}
+          mode={changing}
+          onClose={() => setChanging(null)}
+          onSubmit={(c) => {
+            (changing === "edit" ? onEdit : onPropose)(c);
+            setChanging(null);
+          }}
+        />
       )}
       {picking && (
         <div className="rounded-2xl border-2 border-dashed border-brand/50 p-3 space-y-2">
@@ -299,6 +470,16 @@ function HangoutCard({
           {canInvite && pals.length > 0 && (
             <button className="chip !border-brand/60" onClick={() => setPicking((x) => !x)}>
               ＋ Invite a pal
+            </button>
+          )}
+          {!h.isHost && (
+            <button className="chip" onClick={() => setChanging(changing === "suggest" ? null : "suggest")}>
+              💡 Suggest a change
+            </button>
+          )}
+          {h.isHost && (
+            <button className="chip" onClick={() => setChanging(changing === "edit" ? null : "edit")}>
+              ✏️ Edit
             </button>
           )}
           {joined && (
@@ -371,6 +552,12 @@ export default function Hangouts({ pals, me, draft, onDraft }: { pals: Townspers
             onInvite={(invite) => act(call("PATCH", { id: h.id, invite }))}
             onRemove={(remove) => act(call("PATCH", { id: h.id, remove }))}
             onRsvp={(status) => act(call("PATCH", { id: h.id, status }))}
+            onPropose={(c) => act(callProposals("POST", { hangoutId: h.id, ...c }))}
+            onProposal={(id, action) => {
+              if (action === "accept" && !confirm("Change the hangout to this? If the time moves, people who haven't 👍'd it get asked again.")) return;
+              act(callProposals("PATCH", { id, action }));
+            }}
+            onEdit={(edit) => act(call("PATCH", { id: h.id, edit }))}
             onCancel={() => confirm(`Cancel "${h.title}"? Everyone invited will stop seeing it.`) && act(call("DELETE", undefined, `?id=${h.id}`))}
           />
         ))}

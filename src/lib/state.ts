@@ -36,6 +36,20 @@ export type Connections = {
 
 export type RSVP = "invited" | "going" | "maybe" | "declined";
 
+/** "How about Saturday instead?" — a suggested new time / place / idea for a hangout. */
+export type Proposal = {
+  id: string;
+  proposer: Townsperson;
+  mine: boolean;
+  startsAt?: string;
+  place?: string;
+  title?: string;
+  note: string;
+  votes: number;
+  iVoted: boolean;
+  voters: string[]; // first names
+};
+
 /** A plan with pals. Visible to the host, anyone invited, and (if open) all of the host's pals. */
 export type Hangout = {
   id: string;
@@ -49,6 +63,8 @@ export type Hangout = {
   myStatus: RSVP | null;
   invitedMeBy?: string; // first name of whoever invited you
   people: { person: Townsperson; status: RSVP; invitedBy?: string }[]; // invitedBy = first name of whoever brought them
+  proposals: Proposal[]; // open suggestions, most-voted first
+  changed?: { at: string; note: string }; // last time the host changed the plan (and what changed)
 };
 
 export const EMPTY_CONNECTIONS: Connections = { mine: {}, incoming: [], contacts: {}, friends: [] };

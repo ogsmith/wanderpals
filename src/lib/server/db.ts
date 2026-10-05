@@ -56,6 +56,26 @@ export function ensureSchema() {
     )`;
     await sql`create index if not exists hangout_people_user on hangout_people (user_id)`;
     await sql`alter table hangout_people add column if not exists invited_by text`;
+    await sql`alter table hangouts add column if not exists changed_at timestamptz`;
+    await sql`alter table hangouts add column if not exists change_note text`;
+    // Suggested changes (new time / place / idea) that people can 👍 and the host can accept.
+    await sql`create table if not exists hangout_proposals (
+      id bigserial primary key,
+      hangout_id bigint not null references hangouts (id) on delete cascade,
+      proposer text not null,
+      starts_at timestamptz,
+      place text,
+      title text,
+      note text not null default '',
+      status text not null default 'open' check (status in ('open', 'accepted', 'dismissed')),
+      created_at timestamptz not null default now()
+    )`;
+    await sql`create index if not exists hangout_proposals_hangout on hangout_proposals (hangout_id, status)`;
+    await sql`create table if not exists hangout_votes (
+      proposal_id bigint not null references hangout_proposals (id) on delete cascade,
+      user_id text not null,
+      primary key (proposal_id, user_id)
+    )`;
     // ---- live town: presence, chat, hang spots, safety ----
     await sql`create table if not exists presence (
       user_id text primary key,
